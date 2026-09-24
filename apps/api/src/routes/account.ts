@@ -903,38 +903,44 @@ export function createAccountRouter(
                         return;
                     }
 
-                    res.status(200).json({
-                        data: {
-                            id:
-                                existing.id,
+                    if (
+                        existing.status !==
+                        'PENDING'
+                    ) {
+                        res.status(200).json({
+                            data: {
+                                id:
+                                    existing.id,
 
-                            status:
-                                existing.status,
+                                status:
+                                    existing.status,
 
-                            asset:
-                                existing.asset,
+                                asset:
+                                    existing.asset,
 
-                            amount:
-                                existing.amount.toString(),
+                                amount:
+                                    existing.amount.toString(),
 
-                            destination:
-                                existing.destination,
+                                destination:
+                                    existing.destination,
 
-                            externalRef:
-                                existing.externalRef,
+                                externalRef:
+                                    existing.externalRef,
 
-                            providerRef:
-                                existing.providerRef,
+                                providerRef:
+                                    existing.providerRef,
 
-                            failureReason:
-                                existing.failureReason,
-                        },
-                    });
+                                failureReason:
+                                    existing.failureReason,
+                            },
+                        });
 
-                    return;
+                        return;
+                    }
                 }
 
                 const withdrawal =
+                    existing ??
                     await prisma.withdrawal.create({
                         data: {
                             userId:
