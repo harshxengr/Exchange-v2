@@ -77,6 +77,7 @@ export type ExchangeEvent =
         locked: string;
         reason?: string;
         referenceId?: string;
+        errorCode?: string;
         occurredAt: string;
     };
 
