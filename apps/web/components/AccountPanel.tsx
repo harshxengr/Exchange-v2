@@ -215,9 +215,9 @@ export function AccountPanel({
       !/^\d+$/.test(
         normalizedAmount,
       ) ||
-      BigInt(
+      /^0+$/.test(
         normalizedAmount,
-      ) <= 0n
+      )
     ) {
       setDepositError(
         'Amount must be a positive integer.',
