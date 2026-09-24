@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type FormEvent,
   useEffect,
   useState,
 } from 'react';
@@ -20,8 +21,7 @@ import {
 } from '../lib/useRealtimeAccount';
 
 type Props = {
-  marketId:
-    string;
+  marketId: string;
 };
 
 const API_URL =
@@ -123,9 +123,7 @@ export function AccountPanel({
       setDepositError(
         null,
       );
-    } catch (
-      error,
-    ) {
+    } catch (error) {
       setDepositError(
         error instanceof Error
           ? error.message
@@ -180,7 +178,7 @@ export function AccountPanel({
   ]);
 
   async function submitDeposit(
-    event: React.FormEvent<HTMLFormElement>,
+    event: FormEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault();
 
@@ -203,10 +201,8 @@ export function AccountPanel({
       externalRef.trim();
 
     if (
-      normalizedAsset.length <
-        2 ||
-      normalizedAsset.length >
-        20
+      normalizedAsset.length < 2 ||
+      normalizedAsset.length > 20
     ) {
       setDepositError(
         'Asset must contain 2-20 characters.',
@@ -231,10 +227,8 @@ export function AccountPanel({
     }
 
     if (
-      normalizedExternalRef.length ===
-        0 ||
-      normalizedExternalRef.length >
-        200
+      normalizedExternalRef.length === 0 ||
+      normalizedExternalRef.length > 200
     ) {
       setDepositError(
         'External reference must contain 1-200 characters.',
@@ -286,9 +280,7 @@ export function AccountPanel({
       );
 
       await loadDeposits();
-    } catch (
-      error,
-    ) {
+    } catch (error) {
       setDepositError(
         error instanceof Error
           ? error.message
