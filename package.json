@@ -1,0 +1,26 @@
+{
+    "name": "exchange",
+    "private": true,
+    "version": "1.0.0",
+    "packageManager": "pnpm@10.15.0",
+    "scripts": {
+        "dev": "turbo dev",
+        "build": "turbo build",
+        "test": "turbo test",
+        "lint": "turbo lint",
+        "typecheck": "turbo typecheck",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "infra:up": "docker compose up -d",
+        "infra:down": "docker compose down",
+        "db:generate": "pnpm --filter @exchange/db db:generate",
+        "db:migrate": "pnpm --filter @exchange/db db:migrate",
+        "db:deploy": "pnpm --filter @exchange/db db:deploy",
+        "db:studio": "pnpm --filter @exchange/db db:studio"
+    },
+    "devDependencies": {
+        "prettier": "^3.6.2",
+        "turbo": "^2.5.6",
+        "typescript": "^5.9.2"
+    }
+}

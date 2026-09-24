@@ -1,0 +1,28 @@
+{
+    "name": "@exchange/messaging",
+    "private": true,
+    "version": "1.0.0",
+    "type": "module",
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "import": "./src/index.ts"
+        }
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "smoke": "tsx src/smoke-test.ts",
+        "engine-smoke": "tsx src/engine-smoke.ts"
+    },
+    "dependencies": {
+        "@exchange/domain": "workspace:*",
+        "redis": "^5.9.0"
+    },
+    "devDependencies": {
+        "@types/node": "^24.0.0",
+        "tsx": "^4.20.0",
+        "typescript": "^5.9.0"
+    }
+}

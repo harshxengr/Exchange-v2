@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  balances     Balance[]
+  orders       Order[]
+  buyTrades    Trade[]       @relation("BuyerTrades")
+  sellTrades   Trade[]       @relation("SellerTrades")
+}
+
+model Market {
+  id            String   @id
+  baseAsset     String
+  quoteAsset    String
+  priceScale    Int
+  quantityScale Int
+  minQuantity   BigInt
+  tickSize      BigInt
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders        Order[]
+  trades        Trade[]
+
+  @@index([active])
+}
+
+model Balance {
+  id        String   @id @default(uuid())
+  userId    String
+  asset     String
+  available BigInt   @default(0)
+  locked    BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, asset])
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderType {
+  MARKET
+  LIMIT
+}
+
+enum TimeInForce {
+  GTC
+  IOC
+}
+
+enum OrderStatus {
+  NEW
+  PARTIALLY_FILLED
+  FILLED
+  CANCELED
+  REJECTED
+}
+
+model Order {
+  id             String        @id @default(uuid())
+  userId         String
+  marketId       String
+  side           OrderSide
+  type           OrderType
+  timeInForce    TimeInForce
+  price          BigInt?
+  quantity       BigInt
+  filledQuantity BigInt        @default(0)
+  status         OrderStatus
+  postOnly       Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  market Market @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status])
+  @@index([marketId, createdAt])
+}
+
+model Trade {
+  id           String   @id @default(uuid())
+  marketId     String
+  makerOrderId String
+  takerOrderId String
+  buyerId      String
+  sellerId     String
+  price        BigInt
+  quantity     BigInt
+  createdAt    DateTime @default(now())
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  buyer  User @relation("BuyerTrades", fields: [buyerId], references: [id], onDelete: Restrict)
+  seller User @relation("SellerTrades", fields: [sellerId], references: [id], onDelete: Restrict)
+
+  @@index([marketId, createdAt])
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+}
+
+model LedgerEntry {
+  id          String   @id @default(uuid())
+  userId      String
+  asset       String
+  amount      BigInt
+  reason      String
+  referenceId String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@unique([reason, referenceId])
+}
+
+model Deposit {
+  id          String   @id @default(uuid())
+  userId      String
+  asset       String
+  amount      BigInt
+  status      String   @default("PENDING")
+  externalRef String?
+  confirmedAt DateTime?
+  creditedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([asset, externalRef])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([externalRef])
+}
+
+model ProcessedEvent {
+  eventId     String   @id
+  eventType   String
+  processedAt DateTime @default(now())
+}
+
+model ProcessedCommand {
+  commandId   String   @id
+  commandType String
+  processedAt DateTime @default(now())
+}

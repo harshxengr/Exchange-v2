@@ -1,0 +1,16 @@
+node_modules
+.pnpm-store
+
+.env
+.env.*
+!.env.example
+
+dist
+.next
+coverage
+
+.DS_Store
+
+*.log
+
+prisma/generated

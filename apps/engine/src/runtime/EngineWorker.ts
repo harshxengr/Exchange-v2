@@ -1,0 +1,883 @@
+import type {
+  RedisClient,
+  EngineCommand,
+  ExchangeEvent,
+} from '@exchange/messaging';
+
+import {
+  acknowledgeCommand,
+  appendEvent,
+  readCommands,
+  readPendingCommands,
+} from '@exchange/messaging';
+
+import type {
+  Fill,
+  Order,
+} from '@exchange/domain';
+
+import {
+  MatchingEngine,
+} from '../engine/MatchingEngine.js';
+
+import {
+  parsePlaceOrder,
+} from './CommandProcessor.js';
+
+import {
+  SnapshotStore,
+} from './SnapshotStore.js';
+
+import type {
+  EngineCheckpoint,
+} from './EngineCheckpoint.js';
+
+import {
+  compareStreamIds,
+} from './streamId.js';
+
+import {
+  RecoveryManager,
+} from './RecoveryManager.js';
+
+export class EngineWorker {
+  private readonly consumerName: string;
+
+  private readonly snapshots: SnapshotStore;
+
+  private lastProcessedCommandStreamId:
+    string | null = null;
+
+  private readonly recovery: RecoveryManager;
+
+  constructor(
+    private readonly redis: RedisClient,
+    private readonly engine: MatchingEngine,
+  ) {
+    this.consumerName =
+      process.env.ENGINE_CONSUMER_NAME ??
+      'engine';
+
+    this.snapshots =
+      new SnapshotStore(
+        redis,
+      );
+
+    this.recovery =
+      new RecoveryManager(
+        redis,
+      );
+  }
+
+  async restore(): Promise<void> {
+    const checkpoint =
+      await this.snapshots.load();
+
+    if (!checkpoint) {
+      console.log(
+        '[engine] no checkpoint found',
+      );
+
+      return;
+    }
+
+    this.engine.restoreSnapshot(
+      checkpoint.snapshot,
+    );
+
+    this.lastProcessedCommandStreamId =
+      checkpoint
+        .lastProcessedCommandStreamId;
+
+    console.log(
+      `[engine] restored checkpoint=${this.lastProcessedCommandStreamId}`,
+    );
+
+    /*
+     * Replay every command after the
+     * checkpoint.
+     *
+     * Recovery uses the same normal
+     * command-processing path, which means
+     * idempotency, events, snapshots and
+     * ACK ordering stay consistent.
+     */
+    const latestStreamId =
+      await this.recovery.replayAfterCheckpoint(
+        this.lastProcessedCommandStreamId,
+        (
+          messageId,
+          payload,
+        ) =>
+          this.processMessage(
+            messageId,
+            payload,
+          ),
+      );
+
+    if (
+      latestStreamId !== null
+    ) {
+      this.lastProcessedCommandStreamId =
+        latestStreamId;
+
+      console.log(
+        `[engine] recovery complete through=${latestStreamId}`,
+      );
+    }
+  }
+
+  async run(): Promise<void> {
+    console.log(
+      `[engine] consumer=${this.consumerName}`,
+    );
+
+    /*
+     * First recover the durable snapshot
+     * and replay commands after it.
+     */
+    await this.restore();
+
+    /*
+     * Then handle any messages that remain
+     * pending for this consumer.
+     *
+     * This also handles the case where a
+     * command was checkpointed successfully
+     * but the process crashed before XACK.
+     */
+    await this.processPendingCommands();
+
+    while (true) {
+      const batches =
+        await readCommands(
+          this.redis,
+          this.consumerName,
+          10,
+          1000,
+        );
+
+      if (!batches) {
+        continue;
+      }
+
+      for (
+        const batch of batches
+      ) {
+        for (
+          const message of
+          batch.messages
+        ) {
+          await this.processMessage(
+            message.id,
+            message.message,
+          );
+        }
+      }
+    }
+  }
+
+  private async processPendingCommands(): Promise<void> {
+    while (true) {
+      const batches =
+        await readPendingCommands(
+          this.redis,
+          this.consumerName,
+          10,
+        );
+
+      if (!batches) {
+        return;
+      }
+
+      let processed = 0;
+
+      for (
+        const batch of batches
+      ) {
+        for (
+          const message of
+          batch.messages
+        ) {
+          await this.processMessage(
+            message.id,
+            message.message,
+          );
+
+          processed += 1;
+        }
+      }
+
+      if (processed === 0) {
+        return;
+      }
+
+      if (processed < 10) {
+        return;
+      }
+    }
+  }
+
+  private async processMessage(
+    messageId: string,
+    payload: Record<string, string>,
+  ): Promise<boolean> {
+    /*
+     * ---------------------------------------------------------
+     * 1. Check whether this Redis message is already covered
+     *    by our durable engine checkpoint.
+     * ---------------------------------------------------------
+     */
+    if (
+      this.lastProcessedCommandStreamId !== null &&
+      compareStreamIds(
+        messageId,
+        this.lastProcessedCommandStreamId,
+      ) <= 0
+    ) {
+      await acknowledgeCommand(
+        this.redis,
+        messageId,
+      );
+
+      console.log(
+        '[engine] acknowledged checkpointed command',
+        {
+          messageId,
+          checkpoint:
+            this.lastProcessedCommandStreamId,
+        },
+      );
+
+      return true;
+    }
+
+    try {
+      /*
+       * -------------------------------------------------------
+       * 2. Validate the Redis message.
+       * -------------------------------------------------------
+       */
+      const rawPayload =
+        payload.payload;
+
+      if (!rawPayload) {
+        throw new Error(
+          `COMMAND_PAYLOAD_MISSING:${messageId}`,
+        );
+      }
+
+      let command:
+        EngineCommand;
+
+      try {
+        command =
+          JSON.parse(
+            rawPayload,
+          ) as EngineCommand;
+      } catch {
+        throw new Error(
+          `INVALID_COMMAND_JSON:${messageId}`,
+        );
+      }
+
+      /*
+       * commandId is the application-level identity
+       * of the logical operation.
+       */
+      if (
+        !command.commandId
+      ) {
+        throw new Error(
+          `COMMAND_ID_MISSING:${messageId}`,
+        );
+      }
+
+      /*
+       * -------------------------------------------------------
+       * 3. Application-level idempotency.
+       * -------------------------------------------------------
+       */
+      if (
+        this.engine.hasProcessedCommand(
+          command.commandId,
+        )
+      ) {
+        await acknowledgeCommand(
+          this.redis,
+          messageId,
+        );
+
+        console.log(
+          '[engine] duplicate command ignored',
+          {
+            messageId,
+            commandId:
+              command.commandId,
+          },
+        );
+
+        return true;
+      }
+
+      /*
+       * -------------------------------------------------------
+       * 4. Execute the business operation.
+       * -------------------------------------------------------
+       */
+      const events =
+        this.processCommand(
+          command,
+        );
+
+      /*
+       * -------------------------------------------------------
+       * 5. Publish every resulting event.
+       *
+       * We do not mark the command as processed until all
+       * events have been successfully appended.
+       * -------------------------------------------------------
+       */
+      for (
+        const event of events
+      ) {
+        await appendEvent(
+          this.redis,
+          event,
+        );
+      }
+
+      /*
+       * -------------------------------------------------------
+       * 6. Mark the logical command as processed.
+       * -------------------------------------------------------
+       */
+      this.engine.markCommandProcessed(
+        command.commandId,
+      );
+
+      /*
+       * -------------------------------------------------------
+       * 7. Persist engine state BEFORE ACK.
+       * -------------------------------------------------------
+       */
+      await this.saveCheckpoint(
+        messageId,
+      );
+
+      /*
+       * -------------------------------------------------------
+       * 8. ACK only after the checkpoint exists.
+       * -------------------------------------------------------
+       */
+      await acknowledgeCommand(
+        this.redis,
+        messageId,
+      );
+
+      this.lastProcessedCommandStreamId =
+        messageId;
+
+      console.log(
+        '[engine] command processed successfully',
+        {
+          messageId,
+          commandId:
+            command.commandId,
+          eventCount:
+            events.length,
+        },
+      );
+
+      return true;
+    } catch (error) {
+      /*
+       * Never ACK a failed command.
+       */
+      console.error(
+        '[engine] command processing failed',
+        {
+          messageId,
+          error:
+            error instanceof Error
+              ? error.message
+              : error,
+        },
+      );
+
+      return false;
+    }
+  }
+
+  private async saveCheckpoint(
+    messageId: string,
+  ): Promise<void> {
+    const checkpoint:
+      EngineCheckpoint = {
+      version: 1,
+
+      lastProcessedCommandStreamId:
+        messageId,
+
+      snapshot:
+        this.engine.createSnapshot(),
+
+      savedAt:
+        new Date().toISOString(),
+    };
+
+    await this.snapshots.save(
+      checkpoint,
+    );
+  }
+
+  private processCommand(
+    command: EngineCommand,
+  ): ExchangeEvent[] {
+    switch (command.type) {
+      case 'INITIALIZE_USER':
+        return this.initializeUser(
+          command,
+        );
+
+      case 'PLACE_ORDER':
+        return this.placeOrder(
+          command,
+        );
+
+      case 'CANCEL_ORDER':
+        return this.cancelOrder(
+          command,
+        );
+
+      case 'CREDIT_BALANCE':
+        return this.creditBalance(
+          command,
+        );
+
+      default: {
+        const exhaustiveCheck:
+          never = command;
+
+        throw new Error(
+          `UNSUPPORTED_COMMAND:${exhaustiveCheck}`,
+        );
+      }
+    }
+  }
+
+  private creditBalance(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'CREDIT_BALANCE';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const amount =
+      BigInt(
+        command.amount,
+      );
+
+    if (
+      amount <= 0n
+    ) {
+      throw new Error(
+        'INVALID_CREDIT_AMOUNT',
+      );
+    }
+
+    /*
+     * The matching engine is the authority
+     * for the actual balance mutation.
+     */
+    this.engine.creditBalance(
+      command.userId,
+      command.asset,
+      amount,
+    );
+
+    const balances =
+      this.engine.getBalances(
+        command.userId,
+      );
+
+    const balance =
+      balances[command.asset];
+
+    if (!balance) {
+      throw new Error(
+        `BALANCE_NOT_FOUND:${command.userId}:${command.asset}`,
+      );
+    }
+
+    /*
+     * This metadata allows the persistence
+     * worker to distinguish a deposit credit
+     * from a normal trading balance snapshot.
+     */
+    return [
+      {
+        type:
+          'BALANCE_CHANGED',
+
+        eventId:
+          this.eventId(
+            command.commandId,
+            `balance:${command.userId}:${command.asset}`,
+          ),
+
+        commandId:
+          command.commandId,
+
+        userId:
+          command.userId,
+
+        asset:
+          command.asset,
+
+        available:
+          balance.available.toString(),
+
+        locked:
+          balance.locked.toString(),
+
+        reason:
+          'DEPOSIT_CREDIT',
+
+        referenceId:
+          command.depositId,
+
+        occurredAt:
+          new Date().toISOString(),
+      },
+    ];
+  }
+
+  private initializeUser(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'INITIALIZE_USER';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const balances =
+      Object.fromEntries(
+        Object.entries(
+          command.balances,
+        ).map(
+          ([
+            asset,
+            balance,
+          ]) => [
+            asset,
+            {
+              available:
+                BigInt(
+                  balance.available,
+                ),
+
+              locked:
+                BigInt(
+                  balance.locked,
+                ),
+            },
+          ],
+        ),
+      );
+
+    this.engine.initializeUser(
+      command.userId,
+      balances,
+    );
+
+    return [];
+  }
+
+  private placeOrder(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'PLACE_ORDER';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const result =
+      this.engine.placeOrder(
+        parsePlaceOrder(command),
+      );
+
+    const events =
+      this.createOrderEvents(
+        command.commandId,
+        result.order,
+        result.fills,
+      );
+
+    const affectedUsers =
+      new Set<string>();
+
+    affectedUsers.add(
+      result.order.userId,
+    );
+
+    for (
+      const fill of
+      result.fills
+    ) {
+      affectedUsers.add(
+        fill.makerUserId,
+      );
+    }
+
+    for (
+      const userId of
+      affectedUsers
+    ) {
+      events.push(
+        ...this.createBalanceEvents(
+          command.commandId,
+          userId,
+        ),
+      );
+    }
+
+    return events;
+  }
+
+  private cancelOrder(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'CANCEL_ORDER';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const order =
+      this.engine.cancelOrder(
+        command.userId,
+        command.marketId,
+        command.orderId,
+      );
+
+    const events:
+      ExchangeEvent[] = [
+      {
+        type:
+          'ORDER_CANCELED',
+
+        eventId:
+          this.eventId(
+            command.commandId,
+            'cancel',
+          ),
+
+        commandId:
+          command.commandId,
+
+        orderId:
+          order.id,
+
+        userId:
+          order.userId,
+
+        marketId:
+          order.marketId,
+
+        remainingQuantity:
+          (
+            order.quantity -
+            order.filledQuantity
+          ).toString(),
+
+        occurredAt:
+          new Date().toISOString(),
+      },
+    ];
+
+    events.push(
+      ...this.createBalanceEvents(
+        command.commandId,
+        order.userId,
+      ),
+    );
+
+    return events;
+  }
+
+  private createOrderEvents(
+    commandId: string,
+    order: Order,
+    fills: Fill[],
+  ): ExchangeEvent[] {
+    const events:
+      ExchangeEvent[] = [
+      {
+        type:
+          'ORDER_ACCEPTED',
+
+        eventId:
+          this.eventId(
+            commandId,
+            'order',
+          ),
+
+        commandId,
+
+        orderId:
+          order.id,
+
+        userId:
+          order.userId,
+
+        marketId:
+          order.marketId,
+
+        side:
+          order.side,
+
+        orderType:
+          order.type,
+
+        timeInForce:
+          order.timeInForce,
+
+        postOnly:
+          order.postOnly,
+
+        price:
+          order.price === null
+            ? null
+            : order.price.toString(),
+
+        quantity:
+          order.quantity.toString(),
+
+        executedQuantity:
+          order.filledQuantity.toString(),
+
+        remainingQuantity:
+          (
+            order.quantity -
+            order.filledQuantity
+          ).toString(),
+
+        status:
+          order.status,
+
+        occurredAt:
+          new Date().toISOString(),
+      },
+    ];
+
+    for (
+      const [
+        index,
+        fill,
+      ] of fills.entries()
+    ) {
+      const buyerId =
+        order.side === 'BUY'
+          ? order.userId
+          : fill.makerUserId;
+
+      const sellerId =
+        order.side === 'SELL'
+          ? order.userId
+          : fill.makerUserId;
+
+      events.push({
+        type:
+          'TRADE_EXECUTED',
+
+        eventId:
+          this.eventId(
+            commandId,
+            `trade:${index}`,
+          ),
+
+        commandId,
+
+        tradeId:
+          fill.tradeId,
+
+        marketId:
+          order.marketId,
+
+        makerOrderId:
+          fill.makerOrderId,
+
+        takerOrderId:
+          fill.takerOrderId,
+
+        buyerId,
+
+        sellerId,
+
+        price:
+          fill.price.toString(),
+
+        quantity:
+          fill.quantity.toString(),
+
+        occurredAt:
+          new Date().toISOString(),
+      });
+    }
+
+    return events;
+  }
+
+  private createBalanceEvents(
+    commandId: string,
+    userId: string,
+  ): ExchangeEvent[] {
+    const balances =
+      this.engine.getBalances(
+        userId,
+      );
+
+    const occurredAt =
+      new Date().toISOString();
+
+    return Object.entries(
+      balances,
+    ).map(
+      ([
+        asset,
+        balance,
+      ]) => ({
+        type:
+          'BALANCE_CHANGED' as const,
+
+        eventId:
+          this.eventId(
+            commandId,
+            `balance:${userId}:${asset}`,
+          ),
+
+        commandId,
+
+        userId,
+
+        asset,
+
+        available:
+          balance.available.toString(),
+
+        locked:
+          balance.locked.toString(),
+
+        occurredAt,
+      }),
+    );
+  }
+
+  private eventId(
+    commandId: string,
+    suffix: string,
+  ): string {
+    return `${commandId}:${suffix}`;
+  }
+}
