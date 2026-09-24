@@ -1,5 +1,9 @@
 import crypto from 'node:crypto';
 
+import {
+    prisma,
+} from '@exchange/db';
+
 import type {
     CancelOrderCommand,
     EngineReply,
@@ -36,6 +40,10 @@ export type CancelOrderInput = {
 };
 
 export interface EngineClientPort {
+    ensureUserInitialized(
+        userId: string,
+    ): Promise<void>;
+
     placeOrder(
         input: PlaceOrderInput,
     ): Promise<EngineReply>;
@@ -50,6 +58,61 @@ export class EngineClient
     constructor(
         private readonly redis: RedisClient,
     ) { }
+
+    async ensureUserInitialized(
+        userId: string,
+    ): Promise<void> {
+        const balances =
+            await prisma.balance.findMany({
+                where: {
+                    userId,
+                },
+            });
+
+        const commandId =
+            `initialize-user:${userId}:v1`;
+
+        const command = {
+            type:
+                'INITIALIZE_USER' as const,
+
+            commandId,
+
+            replyTo:
+                STREAMS.ENGINE_REPLIES,
+
+            userId,
+
+            balances:
+                Object.fromEntries(
+                    balances.map(
+                        (
+                            balance,
+                        ) => [
+                            balance.asset,
+                            {
+                                available:
+                                    balance.available.toString(),
+                                locked:
+                                    balance.locked.toString(),
+                            },
+                        ],
+                    ),
+                ),
+        };
+
+        /*
+         * Redis Streams preserve insertion order for the
+         * engine consumer. Appending initialization immediately
+         * before the business command therefore guarantees that
+         * a user with durable DB balances is known to the engine
+         * before the order/withdrawal is evaluated.
+         */
+        await appendCommand(
+            this.redis,
+            command,
+        );
+    }
 
     async placeOrder(
         input: PlaceOrderInput,
