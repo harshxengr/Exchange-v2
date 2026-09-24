@@ -408,6 +408,33 @@ describe(
     );
 
     it(
+      'rejects deposits without authentication',
+      async () => {
+        const response =
+          await request(
+            createTestApp(),
+          )
+            .post(
+              '/api/v1/account/deposits',
+            )
+            .send({
+              asset:
+                'INR',
+
+              amount:
+                '100000',
+
+              externalRef:
+                'test-deposit-unauthenticated',
+            });
+
+        expect(
+          response.status,
+        ).toBe(401);
+      },
+    );
+
+    it(
       'returns authenticated balances',
       async () => {
         const token =
