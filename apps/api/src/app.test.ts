@@ -27,6 +27,11 @@ import {
 function createMockEngineClient():
   EngineClientPort {
   return {
+    ensureUserInitialized:
+      async () => {
+        return;
+      },
+
     placeOrder:
       async () => ({
         type:
