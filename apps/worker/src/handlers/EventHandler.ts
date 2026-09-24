@@ -309,7 +309,6 @@ export class EventHandler {
              * NOT recorded here because they don't change the
              * user's total economic balance.
              */
-
             const ledgerEntries = [
               {
                 userId:
@@ -400,12 +399,6 @@ export class EventHandler {
               },
             ];
 
-            /*
-             * If a user trades against themselves, the four
-             * entries still precisely represent the economic
-             * legs of the trade. We are not silently dropping
-             * ledger records.
-             */
             await db.ledgerEntry.createMany({
               data:
                 ledgerEntries,
@@ -472,6 +465,164 @@ export class EventHandler {
               },
             });
 
+            /*
+             * -------------------------------------------------
+             * DEPOSIT CREDIT SETTLEMENT
+             * -------------------------------------------------
+             *
+             * CREDIT_BALANCE is the only balance event that
+             * carries DEPOSIT_CREDIT metadata. When it arrives,
+             * the persistence transaction makes the exchange
+             * balance, deposit state, and immutable ledger entry
+             * durable together.
+             */
+            if (
+              event.reason ===
+              'DEPOSIT_CREDIT'
+            ) {
+              if (
+                !event.referenceId
+              ) {
+                throw new Error(
+                  `DEPOSIT_REFERENCE_MISSING:${event.eventId}`,
+                );
+              }
+
+              const depositId =
+                event.referenceId;
+
+              const deposit =
+                await db.deposit.findUnique({
+                  where: {
+                    id:
+                      depositId,
+                  },
+                });
+
+              if (
+                !deposit
+              ) {
+                throw new Error(
+                  `DEPOSIT_NOT_FOUND:${depositId}`,
+                );
+              }
+
+              if (
+                deposit.userId !==
+                event.userId
+              ) {
+                throw new Error(
+                  `DEPOSIT_USER_MISMATCH:${depositId}`,
+                );
+              }
+
+              if (
+                deposit.asset !==
+                event.asset
+              ) {
+                throw new Error(
+                  `DEPOSIT_ASSET_MISMATCH:${depositId}`,
+                );
+              }
+
+              if (
+                deposit.amount <=
+                0n
+              ) {
+                throw new Error(
+                  `INVALID_DEPOSIT_AMOUNT:${depositId}`,
+                );
+              }
+
+              if (
+                deposit.status ===
+                'FAILED'
+              ) {
+                throw new Error(
+                  `DEPOSIT_ALREADY_FAILED:${depositId}`,
+                );
+              }
+
+              /*
+               * Database uniqueness on (reason, referenceId)
+               * protects this ledger operation if the same
+               * event is delivered concurrently.
+               *
+               * The read first makes normal retries cheap.
+               */
+              const existingDepositLedger =
+                await db.ledgerEntry.findFirst({
+                  where: {
+                    reason:
+                      'DEPOSIT_CREDIT',
+
+                    referenceId:
+                      depositId,
+                  },
+                });
+
+              if (
+                !existingDepositLedger
+              ) {
+                await db.ledgerEntry.create({
+                  data: {
+                    userId:
+                      deposit.userId,
+
+                    asset:
+                      deposit.asset,
+
+                    amount:
+                      deposit.amount,
+
+                    reason:
+                      'DEPOSIT_CREDIT',
+
+                    referenceId:
+                      depositId,
+
+                    createdAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+                  },
+                });
+              }
+
+              /*
+               * Balance + deposit state + ledger are all in
+               * the same database transaction.
+               */
+              if (
+                deposit.status !==
+                'CONFIRMED'
+              ) {
+                await db.deposit.update({
+                  where: {
+                    id:
+                      depositId,
+                  },
+
+                  data: {
+                    status:
+                      'CONFIRMED',
+
+                    confirmedAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+
+                    creditedAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+                  },
+                });
+              }
+
+              break;
+            }
+
             break;
           }
 
@@ -487,8 +638,8 @@ export class EventHandler {
         }
 
         /*
-         * Mark the event only after the business operation
-         * and all ledger writes have succeeded.
+         * Mark the event only after all business writes
+         * have succeeded.
          */
         await db.processedEvent.create({
           data: {
