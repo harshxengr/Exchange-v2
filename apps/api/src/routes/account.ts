@@ -652,6 +652,708 @@ export function createAccountRouter(
     );
 
     /*
+     * GET /api/v1/account/withdrawals
+     */
+    router.get(
+        '/withdrawals',
+        requireAuth,
+        asyncHandler(
+            async (
+                req,
+                res,
+            ) => {
+                const rawLimit =
+                    req.query.limit;
+
+                const limit =
+                    getLimit(
+                        typeof rawLimit ===
+                            'string'
+                            ? rawLimit
+                            : undefined,
+                    );
+
+                if (
+                    limit ===
+                    null
+                ) {
+                    res.status(
+                        400,
+                    ).json({
+                        error: {
+                            code:
+                                'INVALID_LIMIT',
+                            message:
+                                `limit must be an integer between 1 and ${MAX_LIMIT}`,
+                        },
+                    });
+
+                    return;
+                }
+
+                const withdrawals =
+                    await prisma.withdrawal.findMany({
+                        where: {
+                            userId:
+                                req.user.id,
+                        },
+
+                        orderBy: {
+                            createdAt:
+                                'desc',
+                        },
+
+                        take:
+                            limit,
+                    });
+
+                res.status(
+                    200,
+                ).json({
+                    data:
+                        withdrawals.map(
+                            (
+                                withdrawal,
+                            ) => ({
+                                id:
+                                    withdrawal.id,
+
+                                asset:
+                                    withdrawal.asset,
+
+                                amount:
+                                    withdrawal.amount.toString(),
+
+                                destination:
+                                    withdrawal.destination,
+
+                                status:
+                                    withdrawal.status,
+
+                                externalRef:
+                                    withdrawal.externalRef,
+
+                                providerRef:
+                                    withdrawal.providerRef,
+
+                                failureReason:
+                                    withdrawal.failureReason,
+
+                                reservedAt:
+                                    withdrawal.reservedAt === null
+                                        ? null
+                                        : withdrawal.reservedAt.toISOString(),
+
+                                processingAt:
+                                    withdrawal.processingAt === null
+                                        ? null
+                                        : withdrawal.processingAt.toISOString(),
+
+                                completedAt:
+                                    withdrawal.completedAt === null
+                                        ? null
+                                        : withdrawal.completedAt.toISOString(),
+
+                                failedAt:
+                                    withdrawal.failedAt === null
+                                        ? null
+                                        : withdrawal.failedAt.toISOString(),
+
+                                createdAt:
+                                    withdrawal.createdAt.toISOString(),
+
+                                updatedAt:
+                                    withdrawal.updatedAt.toISOString(),
+                            }),
+                        ),
+                });
+            },
+        ),
+    );
+
+    /*
+     * POST /api/v1/account/withdrawals
+     *
+     * Creates a withdrawal request and asks the engine to
+     * reserve the funds. The external payout is deliberately
+     * a separate provider callback step.
+     */
+    router.post(
+        '/withdrawals',
+        requireAuth,
+        asyncHandler(
+            async (
+                req,
+                res,
+            ) => {
+                const asset =
+                    normalizeAsset(
+                        req.body?.asset,
+                    );
+
+                const amount =
+                    req.body?.amount;
+
+                const destination =
+                    typeof req.body?.destination ===
+                    'string'
+                        ? req.body.destination.trim()
+                        : null;
+
+                const externalRef =
+                    normalizeExternalRef(
+                        req.body?.externalRef,
+                    );
+
+                if (
+                    asset === null
+                ) {
+                    res.status(400).json({
+                        error: {
+                            code:
+                                'INVALID_ASSET',
+                            message:
+                                'asset must contain 2-20 uppercase letters, digits, or underscores',
+                        },
+                    });
+
+                    return;
+                }
+
+                if (
+                    !isValidAmount(
+                        amount,
+                    )
+                ) {
+                    res.status(400).json({
+                        error: {
+                            code:
+                                'INVALID_AMOUNT',
+                            message:
+                                'amount must be a positive integer string',
+                        },
+                    });
+
+                    return;
+                }
+
+                if (
+                    destination === null ||
+                    destination.length === 0 ||
+                    destination.length > 500
+                ) {
+                    res.status(400).json({
+                        error: {
+                            code:
+                                'INVALID_DESTINATION',
+                            message:
+                                'destination is required and must be 1-500 characters',
+                        },
+                    });
+
+                    return;
+                }
+
+                if (
+                    externalRef === null
+                ) {
+                    res.status(400).json({
+                        error: {
+                            code:
+                                'INVALID_EXTERNAL_REF',
+                            message:
+                                'externalRef is required and must be 1-200 characters',
+                        },
+                    });
+
+                    return;
+                }
+
+                const requestedAmount =
+                    BigInt(amount);
+
+                const existing =
+                    await prisma.withdrawal.findUnique({
+                        where: {
+                            userId_externalRef: {
+                                userId:
+                                    req.user.id,
+                                externalRef,
+                            },
+                        },
+                    });
+
+                if (
+                    existing
+                ) {
+                    if (
+                        existing.asset !== asset ||
+                        existing.amount !== requestedAmount ||
+                        existing.destination !== destination
+                    ) {
+                        res.status(409).json({
+                            error: {
+                                code:
+                                    'WITHDRAWAL_REFERENCE_MISMATCH',
+                                message:
+                                    'externalRef already exists with different withdrawal details',
+                            },
+                        });
+
+                        return;
+                    }
+
+                    res.status(200).json({
+                        data: {
+                            id:
+                                existing.id,
+
+                            status:
+                                existing.status,
+
+                            asset:
+                                existing.asset,
+
+                            amount:
+                                existing.amount.toString(),
+
+                            destination:
+                                existing.destination,
+
+                            externalRef:
+                                existing.externalRef,
+
+                            providerRef:
+                                existing.providerRef,
+
+                            failureReason:
+                                existing.failureReason,
+                        },
+                    });
+
+                    return;
+                }
+
+                const withdrawal =
+                    await prisma.withdrawal.create({
+                        data: {
+                            userId:
+                                req.user.id,
+
+                            asset,
+
+                            amount:
+                                requestedAmount,
+
+                            destination,
+
+                            externalRef,
+
+                            status:
+                                'PENDING',
+                        },
+                    });
+
+                const command = {
+                    type:
+                        'RESERVE_WITHDRAWAL' as const,
+
+                    commandId:
+                        `withdrawal:${withdrawal.id}:reserve`,
+
+                    userId:
+                        withdrawal.userId,
+
+                    asset:
+                        withdrawal.asset,
+
+                    amount:
+                        withdrawal.amount.toString(),
+
+                    withdrawalId:
+                        withdrawal.id,
+                };
+
+                try {
+                    const client =
+                        await getRedis();
+
+                    await appendCommand(
+                        client,
+                        command,
+                    );
+                } catch (error) {
+                    console.error(
+                        '[account] failed to enqueue withdrawal reservation',
+                        error,
+                    );
+
+                    res.status(503).json({
+                        error: {
+                            code:
+                                'WITHDRAWAL_QUEUE_UNAVAILABLE',
+                            message:
+                                'withdrawal was recorded but could not be queued; retry the same externalRef',
+                        },
+                    });
+
+                    return;
+                }
+
+                res.status(201).json({
+                    data: {
+                        id:
+                            withdrawal.id,
+
+                        status:
+                            'PENDING',
+
+                        asset:
+                            withdrawal.asset,
+
+                        amount:
+                            withdrawal.amount.toString(),
+
+                        destination:
+                            withdrawal.destination,
+
+                        externalRef:
+                            withdrawal.externalRef,
+                    },
+                });
+            },
+        ),
+    );
+
+    /*
+     * POST /api/v1/account/withdrawals/callback
+     *
+     * External payout-provider callback.
+     *
+     * This endpoint deliberately does not use user JWT auth.
+     * It uses a shared secret so an external payout system can
+     * advance the withdrawal state machine.
+     *
+     * Configure:
+     *   WITHDRAWAL_WEBHOOK_SECRET
+     */
+    router.post(
+        '/withdrawals/callback',
+        asyncHandler(
+            async (
+                req,
+                res,
+            ) => {
+                const configuredSecret =
+                    process.env.WITHDRAWAL_WEBHOOK_SECRET;
+
+                const suppliedSecret =
+                    req.header(
+                        'X-Withdrawal-Webhook-Secret',
+                    );
+
+                if (
+                    !configuredSecret ||
+                    !suppliedSecret ||
+                    suppliedSecret !== configuredSecret
+                ) {
+                    res.status(401).json({
+                        error: {
+                            code:
+                                'INVALID_WITHDRAWAL_WEBHOOK_SECRET',
+                            message:
+                                'Invalid withdrawal webhook credentials',
+                        },
+                    });
+
+                    return;
+                }
+
+                const withdrawalId =
+                    typeof req.body?.withdrawalId ===
+                    'string'
+                        ? req.body.withdrawalId.trim()
+                        : '';
+
+                const status =
+                    req.body?.status;
+
+                const providerRef =
+                    typeof req.body?.providerRef ===
+                    'string'
+                        ? req.body.providerRef.trim()
+                        : null;
+
+                const reason =
+                    typeof req.body?.reason ===
+                    'string'
+                        ? req.body.reason.trim()
+                        : null;
+
+                if (
+                    withdrawalId.length === 0 ||
+                    !['COMPLETED', 'FAILED'].includes(
+                        status,
+                    )
+                ) {
+                    res.status(400).json({
+                        error: {
+                            code:
+                                'INVALID_WITHDRAWAL_CALLBACK',
+                            message:
+                                'withdrawalId and status=COMPLETED|FAILED are required',
+                        },
+                    });
+
+                    return;
+                }
+
+                const withdrawal =
+                    await prisma.withdrawal.findUnique({
+                        where: {
+                            id:
+                                withdrawalId,
+                        },
+                    });
+
+                if (
+                    !withdrawal
+                ) {
+                    res.status(404).json({
+                        error: {
+                            code:
+                                'WITHDRAWAL_NOT_FOUND',
+                            message:
+                                'Withdrawal was not found',
+                        },
+                    });
+
+                    return;
+                }
+
+                if (
+                    status ===
+                    'COMPLETED'
+                ) {
+                    if (
+                        withdrawal.status ===
+                        'COMPLETED'
+                    ) {
+                        res.status(200).json({
+                            data: {
+                                id:
+                                    withdrawal.id,
+                                status:
+                                    withdrawal.status,
+                            },
+                        });
+
+                        return;
+                    }
+
+                    if (
+                        withdrawal.status !==
+                        'PROCESSING'
+                    ) {
+                        res.status(409).json({
+                            error: {
+                                code:
+                                    'WITHDRAWAL_NOT_PROCESSING',
+                                message:
+                                    `Withdrawal is currently ${withdrawal.status}`,
+                            },
+                        });
+
+                        return;
+                    }
+
+                    if (
+                        !providerRef ||
+                        providerRef.length > 200
+                    ) {
+                        res.status(400).json({
+                            error: {
+                                code:
+                                    'INVALID_PROVIDER_REF',
+                                message:
+                                    'providerRef is required for a successful payout',
+                            },
+                        });
+
+                        return;
+                    }
+
+                    await prisma.withdrawal.update({
+                        where: {
+                            id:
+                                withdrawal.id,
+                        },
+
+                        data: {
+                            providerRef,
+                        },
+                    });
+
+                    try {
+                        const client =
+                            await getRedis();
+
+                        await appendCommand(
+                            client,
+                            {
+                                type:
+                                    'COMPLETE_WITHDRAWAL',
+
+                                commandId:
+                                    `withdrawal:${withdrawal.id}:complete`,
+
+                                userId:
+                                    withdrawal.userId,
+
+                                asset:
+                                    withdrawal.asset,
+
+                                amount:
+                                    withdrawal.amount.toString(),
+
+                                withdrawalId:
+                                    withdrawal.id,
+                            },
+                        );
+                    } catch (error) {
+                        console.error(
+                            '[account] failed to enqueue withdrawal completion',
+                            error,
+                        );
+
+                        res.status(503).json({
+                            error: {
+                                code:
+                                    'WITHDRAWAL_QUEUE_UNAVAILABLE',
+                                message:
+                                    'withdrawal callback recorded but could not be queued; retry the callback',
+                            },
+                        });
+
+                        return;
+                    }
+
+                    res.status(202).json({
+                        data: {
+                            id:
+                                withdrawal.id,
+
+                            status:
+                                'PROCESSING',
+                        },
+                    });
+
+                    return;
+                }
+
+                if (
+                    withdrawal.status ===
+                    'FAILED'
+                ) {
+                    res.status(200).json({
+                        data: {
+                            id:
+                                withdrawal.id,
+                            status:
+                                withdrawal.status,
+                        },
+                    });
+
+                    return;
+                }
+
+                if (
+                    withdrawal.status !==
+                    'PROCESSING'
+                ) {
+                    res.status(409).json({
+                        error: {
+                            code:
+                                'WITHDRAWAL_NOT_PROCESSING',
+                            message:
+                                `Withdrawal is currently ${withdrawal.status}`,
+                        },
+                    });
+
+                    return;
+                }
+
+                await prisma.withdrawal.update({
+                    where: {
+                        id:
+                            withdrawal.id,
+                    },
+
+                    data: {
+                        failureReason:
+                            reason ??
+                            'EXTERNAL_PAYOUT_FAILED',
+                    },
+                });
+
+                try {
+                    const client =
+                        await getRedis();
+
+                    await appendCommand(
+                        client,
+                        {
+                            type:
+                                'FAIL_WITHDRAWAL',
+
+                            commandId:
+                                `withdrawal:${withdrawal.id}:fail`,
+
+                            userId:
+                                withdrawal.userId,
+
+                            asset:
+                                withdrawal.asset,
+
+                            amount:
+                                withdrawal.amount.toString(),
+
+                            withdrawalId:
+                                withdrawal.id,
+                        },
+                    );
+                } catch (error) {
+                    console.error(
+                        '[account] failed to enqueue withdrawal failure',
+                        error,
+                    );
+
+                    res.status(503).json({
+                        error: {
+                            code:
+                                'WITHDRAWAL_QUEUE_UNAVAILABLE',
+                            message:
+                                'withdrawal failure callback recorded but could not be queued; retry the callback',
+                        },
+                    });
+
+                    return;
+                }
+
+                res.status(202).json({
+                    data: {
+                        id:
+                            withdrawal.id,
+
+                        status:
+                            'PROCESSING',
+                    },
+                });
+            },
+        ),
+    );
+
+    /*
      * GET /api/v1/account/trades
      */
     router.get(
