@@ -597,75 +597,13 @@ export function createAccountRouter(
                         deposit.id,
                 };
 
-                const balances =
-                    await prisma.balance.findMany({
-                        where: {
-                            userId:
-                                req.user.id,
-                        },
-                    });
-
                 try {
                     const client =
                         await getRedis();
 
                     await appendCommand(
                         client,
-                        {
-                            type:
-                                'INITIALIZE_USER',
-
-                            commandId:
-                                `initialize-user:${req.user.id}:v1`,
-
-                            replyTo:
-                                'exchange:engine:replies',
-
-                            userId:
-                                req.user.id,
-
-                            balances:
-                                Object.fromEntries(
-                                    balances.map(
-                                        (
-                                            balance,
-                                        ) => [
-                                            balance.asset,
-                                            {
-                                                available:
-                                                    balance.available.toString(),
-
-                                                locked:
-                                                    balance.locked.toString(),
-                                            },
-                                        ],
-                                    ),
-                                ),
-                        },
-                    );
-
-                    await appendCommand(
-                        client,
-                        {
-                            type:
-                                'RESERVE_WITHDRAWAL' as const,
-
-                            commandId:
-                                `withdrawal:${withdrawal.id}:reserve`,
-
-                            userId:
-                                withdrawal.userId,
-
-                            asset:
-                                withdrawal.asset,
-
-                            amount:
-                                withdrawal.amount.toString(),
-
-                            withdrawalId:
-                                withdrawal.id,
-
-                        },
+                        command,
                     );
                 } catch (error) {
                     console.error(
@@ -1022,13 +960,78 @@ export function createAccountRouter(
                         },
                     });
 
+                const balances =
+                    await prisma.balance.findMany({
+                        where: {
+                            userId:
+                                req.user.id,
+                        },
+                    });
+
+                const initializeCommand = {
+                    type:
+                        'INITIALIZE_USER' as const,
+
+                    commandId:
+                        `initialize-user:${req.user.id}:v1`,
+
+                    replyTo:
+                        'exchange:engine:replies',
+
+                    userId:
+                        req.user.id,
+
+                    balances:
+                        Object.fromEntries(
+                            balances.map(
+                                (
+                                    balance,
+                                ) => [
+                                    balance.asset,
+                                    {
+                                        available:
+                                            balance.available.toString(),
+
+                                        locked:
+                                            balance.locked.toString(),
+                                    },
+                                ],
+                            ),
+                        ),
+                };
+
+                const reserveCommand = {
+                    type:
+                        'RESERVE_WITHDRAWAL' as const,
+
+                    commandId:
+                        `withdrawal:${withdrawal.id}:reserve`,
+
+                    userId:
+                        withdrawal.userId,
+
+                    asset:
+                        withdrawal.asset,
+
+                    amount:
+                        withdrawal.amount.toString(),
+
+                    withdrawalId:
+                        withdrawal.id,
+                };
+
                 try {
                     const client =
                         await getRedis();
 
                     await appendCommand(
                         client,
-                        command,
+                        initializeCommand,
+                    );
+
+                    await appendCommand(
+                        client,
+                        reserveCommand,
                     );
                 } catch (error) {
                     console.error(
