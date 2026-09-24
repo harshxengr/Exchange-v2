@@ -455,6 +455,21 @@ export class EngineWorker {
           command,
         );
 
+      case 'RESERVE_WITHDRAWAL':
+        return this.reserveWithdrawal(
+          command,
+        );
+
+      case 'COMPLETE_WITHDRAWAL':
+        return this.completeWithdrawal(
+          command,
+        );
+
+      case 'FAIL_WITHDRAWAL':
+        return this.failWithdrawal(
+          command,
+        );
+
       default: {
         const exhaustiveCheck:
           never = command;
@@ -552,6 +567,176 @@ export class EngineWorker {
           new Date().toISOString(),
       },
     ];
+  }
+
+  private reserveWithdrawal(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'RESERVE_WITHDRAWAL';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const amount =
+      BigInt(
+        command.amount,
+      );
+
+    if (
+      amount <= 0n
+    ) {
+      throw new Error(
+        'INVALID_WITHDRAWAL_AMOUNT',
+      );
+    }
+
+    this.engine.reserveWithdrawal(
+      command.userId,
+      command.asset,
+      amount,
+    );
+
+    return [
+      this.createWithdrawalBalanceEvent(
+        command.commandId,
+        command.userId,
+        command.asset,
+        'WITHDRAWAL_RESERVED',
+        command.withdrawalId,
+      ),
+    ];
+  }
+
+  private completeWithdrawal(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'COMPLETE_WITHDRAWAL';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const amount =
+      BigInt(
+        command.amount,
+      );
+
+    if (
+      amount <= 0n
+    ) {
+      throw new Error(
+        'INVALID_WITHDRAWAL_AMOUNT',
+      );
+    }
+
+    this.engine.completeWithdrawal(
+      command.userId,
+      command.asset,
+      amount,
+    );
+
+    return [
+      this.createWithdrawalBalanceEvent(
+        command.commandId,
+        command.userId,
+        command.asset,
+        'WITHDRAWAL_COMPLETED',
+        command.withdrawalId,
+      ),
+    ];
+  }
+
+  private failWithdrawal(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'FAIL_WITHDRAWAL';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const amount =
+      BigInt(
+        command.amount,
+      );
+
+    if (
+      amount <= 0n
+    ) {
+      throw new Error(
+        'INVALID_WITHDRAWAL_AMOUNT',
+      );
+    }
+
+    this.engine.failWithdrawal(
+      command.userId,
+      command.asset,
+      amount,
+    );
+
+    return [
+      this.createWithdrawalBalanceEvent(
+        command.commandId,
+        command.userId,
+        command.asset,
+        'WITHDRAWAL_RELEASED',
+        command.withdrawalId,
+      ),
+    ];
+  }
+
+  private createWithdrawalBalanceEvent(
+    commandId: string,
+    userId: string,
+    asset: string,
+    reason:
+      | 'WITHDRAWAL_RESERVED'
+      | 'WITHDRAWAL_COMPLETED'
+      | 'WITHDRAWAL_RELEASED',
+    withdrawalId: string,
+  ): ExchangeEvent {
+    const balances =
+      this.engine.getBalances(
+        userId,
+      );
+
+    const balance =
+      balances[asset];
+
+    if (!balance) {
+      throw new Error(
+        `BALANCE_NOT_FOUND:${userId}:${asset}`,
+      );
+    }
+
+    return {
+      type:
+        'BALANCE_CHANGED',
+
+      eventId:
+        this.eventId(
+          commandId,
+          `withdrawal:${withdrawalId}:${reason}`,
+        ),
+
+      commandId,
+
+      userId,
+
+      asset,
+
+      available:
+        balance.available.toString(),
+
+      locked:
+        balance.locked.toString(),
+
+      reason,
+
+      referenceId:
+        withdrawalId,
+
+      occurredAt:
+        new Date().toISOString(),
+    };
   }
 
   private initializeUser(
