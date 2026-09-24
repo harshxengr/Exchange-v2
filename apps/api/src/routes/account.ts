@@ -597,13 +597,75 @@ export function createAccountRouter(
                         deposit.id,
                 };
 
+                const balances =
+                    await prisma.balance.findMany({
+                        where: {
+                            userId:
+                                req.user.id,
+                        },
+                    });
+
                 try {
                     const client =
                         await getRedis();
 
                     await appendCommand(
                         client,
-                        command,
+                        {
+                            type:
+                                'INITIALIZE_USER',
+
+                            commandId:
+                                `initialize-user:${req.user.id}:v1`,
+
+                            replyTo:
+                                'exchange:engine:replies',
+
+                            userId:
+                                req.user.id,
+
+                            balances:
+                                Object.fromEntries(
+                                    balances.map(
+                                        (
+                                            balance,
+                                        ) => [
+                                            balance.asset,
+                                            {
+                                                available:
+                                                    balance.available.toString(),
+
+                                                locked:
+                                                    balance.locked.toString(),
+                                            },
+                                        ],
+                                    ),
+                                ),
+                        },
+                    );
+
+                    await appendCommand(
+                        client,
+                        {
+                            type:
+                                'RESERVE_WITHDRAWAL' as const,
+
+                            commandId:
+                                `withdrawal:${withdrawal.id}:reserve`,
+
+                            userId:
+                                withdrawal.userId,
+
+                            asset:
+                                withdrawal.asset,
+
+                            amount:
+                                withdrawal.amount.toString(),
+
+                            withdrawalId:
+                                withdrawal.id,
+
+                        },
                     );
                 } catch (error) {
                     console.error(
@@ -959,26 +1021,6 @@ export function createAccountRouter(
                                 'PENDING',
                         },
                     });
-
-                const command = {
-                    type:
-                        'RESERVE_WITHDRAWAL' as const,
-
-                    commandId:
-                        `withdrawal:${withdrawal.id}:reserve`,
-
-                    userId:
-                        withdrawal.userId,
-
-                    asset:
-                        withdrawal.asset,
-
-                    amount:
-                        withdrawal.amount.toString(),
-
-                    withdrawalId:
-                        withdrawal.id,
-                };
 
                 try {
                     const client =
