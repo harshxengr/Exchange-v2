@@ -376,20 +376,76 @@ export class MatchingEngine {
     }
 
     creditBalance(
-  userId: string,
-  asset: string,
-  amount: bigint,
-): void {
-  if (amount <= 0n) {
-    throw new Error('INVALID_CREDIT_AMOUNT');
-  }
+        userId: string,
+        asset: string,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            throw new Error(
+                'INVALID_CREDIT_AMOUNT',
+            );
+        }
 
-  this.balances.credit(
-    userId,
-    asset,
-    amount,
-  );
-}
+        this.balances.credit(
+            userId,
+            asset,
+            amount,
+        );
+    }
+
+    reserveWithdrawal(
+        userId: string,
+        asset: string,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            throw new Error(
+                'INVALID_WITHDRAWAL_AMOUNT',
+            );
+        }
+
+        this.balances.lock(
+            userId,
+            asset,
+            amount,
+        );
+    }
+
+    completeWithdrawal(
+        userId: string,
+        asset: string,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            throw new Error(
+                'INVALID_WITHDRAWAL_AMOUNT',
+            );
+        }
+
+        this.balances.debitLocked(
+            userId,
+            asset,
+            amount,
+        );
+    }
+
+    failWithdrawal(
+        userId: string,
+        asset: string,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            throw new Error(
+                'INVALID_WITHDRAWAL_AMOUNT',
+            );
+        }
+
+        this.balances.unlock(
+            userId,
+            asset,
+            amount,
+        );
+    }
 
     getOrder(orderId: string): Order | null {
         return this.orders.get(orderId) ?? null;
