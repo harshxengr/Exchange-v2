@@ -191,6 +191,146 @@ export function getMarketStats(
   );
 }
 
+export type AccountDeposit = {
+  id: string;
+  asset: string;
+  amount: string;
+  status: string;
+  externalRef: string | null;
+  confirmedAt: string | null;
+  creditedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getAccountDeposits(
+  token: string,
+  limit = 20,
+): Promise<AccountDeposit[]> {
+  const response =
+    await fetch(
+      `${API_BASE_URL}/api/v1/account/deposits?limit=${limit}`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+
+        cache:
+          'no-store',
+      },
+    );
+
+  if (
+    !response.ok
+  ) {
+    const body =
+      await response.text();
+
+    throw new Error(
+      body ||
+      'Failed to load deposits',
+    );
+  }
+
+  const body =
+    (await response.json()) as ApiResponse<
+      AccountDeposit[]
+    >;
+
+  return body.data;
+}
+
+export async function createAccountDeposit(
+  token: string,
+  input: {
+    asset: string;
+    amount: string;
+    externalRef: string;
+  },
+): Promise<AccountDeposit> {
+  const response =
+    await fetch(
+      `${API_BASE_URL}/api/v1/account/deposits`,
+      {
+        method:
+          'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+
+          Authorization:
+            `Bearer ${token}`,
+        },
+
+        body:
+          JSON.stringify(
+            input,
+          ),
+      },
+    );
+
+  const body =
+    (await response.json()) as {
+      data?: Partial<AccountDeposit>;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      body.error?.message ??
+      'Failed to create deposit',
+    );
+  }
+
+  if (
+    !body.data
+  ) {
+    throw new Error(
+      'Deposit response did not contain data',
+    );
+  }
+
+  return {
+    id:
+      body.data.id!,
+
+    asset:
+      body.data.asset!,
+
+    amount:
+      body.data.amount!,
+
+    status:
+      body.data.status!,
+
+    externalRef:
+      body.data.externalRef ?? null,
+
+    confirmedAt:
+      body.data.confirmedAt ??
+      null,
+
+    creditedAt:
+      body.data.creditedAt ??
+      null,
+
+    createdAt:
+      body.data.createdAt ??
+      new Date().toISOString(),
+
+    updatedAt:
+      body.data.updatedAt ??
+      new Date().toISOString(),
+  };
+}
+
 export type AccountTrade = {
   id: string;
   marketId: string;
@@ -247,11 +387,10 @@ export async function getAccountTrades(
     );
   }
 
-  const data =
-    (await response.json()) as {
-      trades:
-      AccountTrade[];
-    };
+  const body =
+    (await response.json()) as ApiResponse<
+      AccountTrade[]
+    >;
 
-  return data.trades;
+  return body.data;
 }
