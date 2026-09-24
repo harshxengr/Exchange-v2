@@ -166,6 +166,10 @@ export function createOrdersRouter(
         const orderId =
           crypto.randomUUID();
 
+        await engineClient.ensureUserInitialized(
+          req.user.id,
+        );
+
         const result =
           await engineClient.placeOrder({
             userId:
@@ -285,6 +289,10 @@ export function createOrdersRouter(
 
           return;
         }
+
+        await engineClient.ensureUserInitialized(
+          req.user.id,
+        );
 
         const result =
           await engineClient.cancelOrder({

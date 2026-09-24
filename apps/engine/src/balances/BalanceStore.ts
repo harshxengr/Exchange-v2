@@ -12,6 +12,23 @@ export class BalanceStore {
         userId: string,
         balances: Record<string, Balance>,
     ): void {
+        /*
+         * Initialization is intentionally idempotent.
+         *
+         * The API may send the user's durable balance
+         * snapshot before an order or withdrawal when the
+         * engine process has not seen this user yet.
+         *
+         * Never overwrite an already-live engine account:
+         * the matching engine owns the in-memory balance state
+         * while PostgreSQL is its persistence replica.
+         */
+        if (
+            this.users.has(userId)
+        ) {
+            return;
+        }
+
         const userBalances = new Map<string, Balance>();
 
         for (const [asset, balance] of Object.entries(balances)) {
