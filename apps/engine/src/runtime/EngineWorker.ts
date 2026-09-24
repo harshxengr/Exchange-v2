@@ -590,11 +590,25 @@ export class EngineWorker {
       );
     }
 
-    this.engine.reserveWithdrawal(
-      command.userId,
-      command.asset,
-      amount,
-    );
+    try {
+      this.engine.reserveWithdrawal(
+        command.userId,
+        command.asset,
+        amount,
+      );
+    } catch (error) {
+      return [
+        this.createWithdrawalRejectionEvent(
+          command.commandId,
+          command.userId,
+          command.asset,
+          command.withdrawalId,
+          error instanceof Error
+            ? error.message
+            : 'WITHDRAWAL_RESERVATION_REJECTED',
+        ),
+      ];
+    }
 
     return [
       this.createWithdrawalBalanceEvent(
@@ -681,6 +695,59 @@ export class EngineWorker {
         command.withdrawalId,
       ),
     ];
+  }
+
+  private createWithdrawalRejectionEvent(
+    commandId: string,
+    userId: string,
+    asset: string,
+    withdrawalId: string,
+    errorCode: string,
+  ): ExchangeEvent {
+    const balances =
+      this.engine.getBalances(
+        userId,
+      );
+
+    const balance =
+      balances[asset] ?? {
+        available: 0n,
+        locked: 0n,
+      };
+
+    return {
+      type:
+        'BALANCE_CHANGED',
+
+      eventId:
+        this.eventId(
+          commandId,
+          `withdrawal:${withdrawalId}:rejected`,
+        ),
+
+      commandId,
+
+      userId,
+
+      asset,
+
+      available:
+        balance.available.toString(),
+
+      locked:
+        balance.locked.toString(),
+
+      reason:
+        'WITHDRAWAL_REJECTED',
+
+      referenceId:
+        withdrawalId,
+
+      errorCode,
+
+      occurredAt:
+        new Date().toISOString(),
+    };
   }
 
   private createWithdrawalBalanceEvent(
