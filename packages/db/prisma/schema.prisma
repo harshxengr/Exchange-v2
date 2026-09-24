@@ -19,6 +19,7 @@ model User {
   orders       Order[]
   buyTrades    Trade[]       @relation("BuyerTrades")
   sellTrades   Trade[]       @relation("SellerTrades")
+  withdrawals  Withdrawal[]
 }
 
 model Market {
@@ -144,6 +145,31 @@ model Deposit {
   updatedAt   DateTime  @updatedAt
 
   @@unique([asset, externalRef])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([externalRef])
+}
+
+model Withdrawal {
+  id             String   @id @default(uuid())
+  userId         String
+  asset          String
+  amount         BigInt
+  destination    String
+  externalRef    String
+  providerRef    String?
+  failureReason  String?
+  status         String   @default("PENDING")
+  reservedAt     DateTime?
+  processingAt   DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, externalRef])
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([externalRef])

@@ -435,6 +435,63 @@ describe(
     );
 
     it(
+      'rejects withdrawals without authentication',
+      async () => {
+        const response =
+          await request(
+            createTestApp(),
+          )
+            .post(
+              '/api/v1/account/withdrawals',
+            )
+            .send({
+              asset:
+                'INR',
+
+              amount:
+                '100',
+
+              destination:
+                'bank-test-destination',
+
+              externalRef:
+                'test-withdrawal-unauthenticated',
+            });
+
+        expect(
+          response.status,
+        ).toBe(401);
+      },
+    );
+
+    it(
+      'rejects withdrawal callbacks without a webhook secret',
+      async () => {
+        const response =
+          await request(
+            createTestApp(),
+          )
+            .post(
+              '/api/v1/account/withdrawals/callback',
+            )
+            .send({
+              withdrawalId:
+                'test-withdrawal-id',
+
+              status:
+                'COMPLETED',
+
+              providerRef:
+                'provider-1',
+            });
+
+        expect(
+          response.status,
+        ).toBe(401);
+      },
+    );
+
+    it(
       'returns authenticated balances',
       async () => {
         const token =

@@ -30,6 +30,10 @@ import {
   OrderHistoryPanel,
 } from './OrderHistoryPanel';
 
+import {
+  WithdrawalPanel,
+} from './WithdrawalPanel';
+
 const MARKET_ID =
   'TATA_INR';
 
@@ -162,6 +166,12 @@ export function AppShell() {
             MARKET_ID
           }
         />
+      </div>
+
+      <div
+        className="history-container"
+      >
+        <WithdrawalPanel />
       </div>
     </>
   );

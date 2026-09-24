@@ -4,6 +4,10 @@ import type {
     InitializeUserCommand,
     PlaceOrderCommand,
     CancelOrderCommand,
+    CreditBalanceCommand,
+    ReserveWithdrawalCommand,
+    CompleteWithdrawalCommand,
+    FailWithdrawalCommand,
     EngineCommand,
     EngineReply,
 } from './protocol.js';
@@ -12,6 +16,10 @@ export type {
     InitializeUserCommand,
     PlaceOrderCommand,
     CancelOrderCommand,
+    CreditBalanceCommand,
+    ReserveWithdrawalCommand,
+    CompleteWithdrawalCommand,
+    FailWithdrawalCommand,
     EngineCommand,
     EngineReply,
 } from './protocol.js';
@@ -69,6 +77,7 @@ export type ExchangeEvent =
         locked: string;
         reason?: string;
         referenceId?: string;
+        errorCode?: string;
         occurredAt: string;
     };
 

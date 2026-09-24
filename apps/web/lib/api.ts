@@ -331,6 +331,165 @@ export async function createAccountDeposit(
   };
 }
 
+export type AccountWithdrawal = {
+  id: string;
+  asset: string;
+  amount: string;
+  destination: string;
+  status: string;
+  externalRef: string;
+  providerRef: string | null;
+  failureReason: string | null;
+  reservedAt: string | null;
+  processingAt: string | null;
+  completedAt: string | null;
+  failedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export async function getAccountWithdrawals(
+  token: string,
+  limit = 20,
+): Promise<AccountWithdrawal[]> {
+  const response =
+    await fetch(
+      `${API_BASE_URL}/api/v1/account/withdrawals?limit=${limit}`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
+
+        cache:
+          'no-store',
+      },
+    );
+
+  if (!response.ok) {
+    const body =
+      await response.text();
+
+    throw new Error(
+      body ||
+      'Failed to load withdrawals',
+    );
+  }
+
+  const body =
+    (await response.json()) as ApiResponse<
+      AccountWithdrawal[]
+    >;
+
+  return body.data;
+}
+
+export async function createAccountWithdrawal(
+  token: string,
+  input: {
+    asset: string;
+    amount: string;
+    destination: string;
+    externalRef: string;
+  },
+): Promise<AccountWithdrawal> {
+  const response =
+    await fetch(
+      `${API_BASE_URL}/api/v1/account/withdrawals`,
+      {
+        method:
+          'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+
+          Authorization:
+            `Bearer ${token}`,
+        },
+
+        body:
+          JSON.stringify(
+            input,
+          ),
+      },
+    );
+
+  const body =
+    (await response.json()) as {
+      data?: Partial<AccountWithdrawal>;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+  if (!response.ok) {
+    throw new Error(
+      body.error?.message ??
+      'Failed to create withdrawal',
+    );
+  }
+
+  if (!body.data) {
+    throw new Error(
+      'Withdrawal response did not contain data',
+    );
+  }
+
+  return {
+    id:
+      body.data.id!,
+
+    asset:
+      body.data.asset!,
+
+    amount:
+      body.data.amount!,
+
+    destination:
+      body.data.destination!,
+
+    status:
+      body.data.status!,
+
+    externalRef:
+      body.data.externalRef!,
+
+    providerRef:
+      body.data.providerRef ??
+      null,
+
+    failureReason:
+      body.data.failureReason ??
+      null,
+
+    reservedAt:
+      body.data.reservedAt ??
+      null,
+
+    processingAt:
+      body.data.processingAt ??
+      null,
+
+    completedAt:
+      body.data.completedAt ??
+      null,
+
+    failedAt:
+      body.data.failedAt ??
+      null,
+
+    createdAt:
+      body.data.createdAt ??
+      new Date().toISOString(),
+
+    updatedAt:
+      body.data.updatedAt ??
+      new Date().toISOString(),
+  };
+}
+
 export type AccountTrade = {
   id: string;
   marketId: string;

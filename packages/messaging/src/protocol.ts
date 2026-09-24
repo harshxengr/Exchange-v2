@@ -79,11 +79,76 @@ export type CreditBalanceCommand = {
     depositId: string;
 };
 
+/**
+ * Reserves spendable funds for a withdrawal.
+ *
+ * The engine moves the amount from available
+ * into locked balance. Funds are not removed
+ * from the exchange balance until the external
+ * payout succeeds.
+ */
+export type ReserveWithdrawalCommand = {
+    type: 'RESERVE_WITHDRAWAL';
+
+    commandId: string;
+
+    userId: string;
+
+    asset: string;
+
+    amount: string;
+
+    withdrawalId: string;
+};
+
+/**
+ * Finalizes a withdrawal after the external
+ * payout provider reports success.
+ *
+ * The engine removes the amount from locked
+ * balance. The persistence worker then creates
+ * the immutable negative ledger entry.
+ */
+export type CompleteWithdrawalCommand = {
+    type: 'COMPLETE_WITHDRAWAL';
+
+    commandId: string;
+
+    userId: string;
+
+    asset: string;
+
+    amount: string;
+
+    withdrawalId: string;
+};
+
+/**
+ * Releases reserved funds when the external
+ * payout provider reports failure.
+ */
+export type FailWithdrawalCommand = {
+    type: 'FAIL_WITHDRAWAL';
+
+    commandId: string;
+
+    userId: string;
+
+    asset: string;
+
+    amount: string;
+
+    withdrawalId: string;
+};
+
 export type EngineCommand =
     | InitializeUserCommand
     | PlaceOrderCommand
     | CancelOrderCommand
-    | CreditBalanceCommand;
+    | CreditBalanceCommand
+    | ReserveWithdrawalCommand
+    | CompleteWithdrawalCommand
+    | FailWithdrawalCommand;
 
 export type EngineReply =
     | {
