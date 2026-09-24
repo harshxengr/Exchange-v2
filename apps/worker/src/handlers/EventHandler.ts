@@ -469,12 +469,6 @@ export class EventHandler {
              * -------------------------------------------------
              * DEPOSIT CREDIT SETTLEMENT
              * -------------------------------------------------
-             *
-             * CREDIT_BALANCE is the only balance event that
-             * carries DEPOSIT_CREDIT metadata. When it arrives,
-             * the persistence transaction makes the exchange
-             * balance, deposit state, and immutable ledger entry
-             * durable together.
              */
             if (
               event.reason ===
@@ -499,9 +493,7 @@ export class EventHandler {
                   },
                 });
 
-              if (
-                !deposit
-              ) {
+              if (!deposit) {
                 throw new Error(
                   `DEPOSIT_NOT_FOUND:${depositId}`,
                 );
@@ -525,10 +517,7 @@ export class EventHandler {
                 );
               }
 
-              if (
-                deposit.amount <=
-                0n
-              ) {
+              if (deposit.amount <= 0n) {
                 throw new Error(
                   `INVALID_DEPOSIT_AMOUNT:${depositId}`,
                 );
@@ -543,13 +532,6 @@ export class EventHandler {
                 );
               }
 
-              /*
-               * Database uniqueness on (reason, referenceId)
-               * protects this ledger operation if the same
-               * event is delivered concurrently.
-               *
-               * The read first makes normal retries cheap.
-               */
               const existingDepositLedger =
                 await db.ledgerEntry.findFirst({
                   where: {
@@ -589,10 +571,6 @@ export class EventHandler {
                 });
               }
 
-              /*
-               * Balance + deposit state + ledger are all in
-               * the same database transaction.
-               */
               if (
                 deposit.status !==
                 'CONFIRMED'
@@ -619,8 +597,382 @@ export class EventHandler {
                   },
                 });
               }
+            }
 
-              break;
+            /*
+             * -------------------------------------------------
+             * WITHDRAWAL RESERVED
+             * -------------------------------------------------
+             *
+             * The engine has atomically moved the amount from
+             * available into locked. The withdrawal becomes
+             * PROCESSING only after that engine event is durable.
+             */
+            if (
+              event.reason ===
+              'WITHDRAWAL_RESERVED'
+            ) {
+              if (!event.referenceId) {
+                throw new Error(
+                  `WITHDRAWAL_REFERENCE_MISSING:${event.eventId}`,
+                );
+              }
+
+              const withdrawalId =
+                event.referenceId;
+
+              const withdrawal =
+                await db.withdrawal.findUnique({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+                });
+
+              if (!withdrawal) {
+                throw new Error(
+                  `WITHDRAWAL_NOT_FOUND:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.userId !==
+                event.userId
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_USER_MISMATCH:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.asset !==
+                event.asset
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_ASSET_MISMATCH:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.amount <=
+                0n
+              ) {
+                throw new Error(
+                  `INVALID_WITHDRAWAL_AMOUNT:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.status ===
+                'PENDING'
+              ) {
+                await db.withdrawal.update({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+
+                  data: {
+                    status:
+                      'PROCESSING',
+
+                    reservedAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+
+                    processingAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+                  },
+                });
+              } else if (
+                withdrawal.status !==
+                'PROCESSING'
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_INVALID_RESERVATION_STATE:${withdrawalId}:${withdrawal.status}`,
+                );
+              }
+            }
+
+            /*
+             * -------------------------------------------------
+             * WITHDRAWAL REJECTED
+             * -------------------------------------------------
+             *
+             * Reservation failed before any funds were locked,
+             * for example because available funds were too low.
+             */
+            if (
+              event.reason ===
+              'WITHDRAWAL_REJECTED'
+            ) {
+              if (!event.referenceId) {
+                throw new Error(
+                  `WITHDRAWAL_REFERENCE_MISSING:${event.eventId}`,
+                );
+              }
+
+              const withdrawalId =
+                event.referenceId;
+
+              const withdrawal =
+                await db.withdrawal.findUnique({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+                });
+
+              if (!withdrawal) {
+                throw new Error(
+                  `WITHDRAWAL_NOT_FOUND:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.status ===
+                'PENDING'
+              ) {
+                await db.withdrawal.update({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+
+                  data: {
+                    status:
+                      'FAILED',
+
+                    failureReason:
+                      event.errorCode ??
+                      'WITHDRAWAL_RESERVATION_REJECTED',
+
+                    failedAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+                  },
+                });
+              } else if (
+                withdrawal.status !==
+                'FAILED'
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_INVALID_REJECTION_STATE:${withdrawalId}:${withdrawal.status}`,
+                );
+              }
+            }
+
+            /*
+             * -------------------------------------------------
+             * WITHDRAWAL COMPLETED
+             * -------------------------------------------------
+             *
+             * The engine has removed the amount from locked
+             * balance. This is the point at which an immutable
+             * negative ledger entry is created.
+             */
+            if (
+              event.reason ===
+              'WITHDRAWAL_COMPLETED'
+            ) {
+              if (!event.referenceId) {
+                throw new Error(
+                  `WITHDRAWAL_REFERENCE_MISSING:${event.eventId}`,
+                );
+              }
+
+              const withdrawalId =
+                event.referenceId;
+
+              const withdrawal =
+                await db.withdrawal.findUnique({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+                });
+
+              if (!withdrawal) {
+                throw new Error(
+                  `WITHDRAWAL_NOT_FOUND:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.userId !==
+                event.userId
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_USER_MISMATCH:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.asset !==
+                event.asset
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_ASSET_MISMATCH:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.amount <=
+                0n
+              ) {
+                throw new Error(
+                  `INVALID_WITHDRAWAL_AMOUNT:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.status ===
+                'COMPLETED'
+              ) {
+                break;
+              }
+
+              if (
+                withdrawal.status !==
+                'PROCESSING'
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_INVALID_COMPLETION_STATE:${withdrawalId}:${withdrawal.status}`,
+                );
+              }
+
+              const existingWithdrawalLedger =
+                await db.ledgerEntry.findFirst({
+                  where: {
+                    reason:
+                      'WITHDRAWAL_COMPLETED',
+
+                    referenceId:
+                      withdrawalId,
+                  },
+                });
+
+              if (
+                !existingWithdrawalLedger
+              ) {
+                await db.ledgerEntry.create({
+                  data: {
+                    userId:
+                      withdrawal.userId,
+
+                    asset:
+                      withdrawal.asset,
+
+                    amount:
+                      -withdrawal.amount,
+
+                    reason:
+                      'WITHDRAWAL_COMPLETED',
+
+                    referenceId:
+                      withdrawalId,
+
+                    createdAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+                  },
+                });
+              }
+
+              await db.withdrawal.update({
+                where: {
+                  id:
+                    withdrawalId,
+                },
+
+                data: {
+                  status:
+                    'COMPLETED',
+
+                  completedAt:
+                    new Date(
+                      event.occurredAt,
+                    ),
+                },
+              });
+            }
+
+            /*
+             * -------------------------------------------------
+             * WITHDRAWAL RELEASED
+             * -------------------------------------------------
+             *
+             * The engine has returned the reserved amount from
+             * locked to available balance after payout failure.
+             */
+            if (
+              event.reason ===
+              'WITHDRAWAL_RELEASED'
+            ) {
+              if (!event.referenceId) {
+                throw new Error(
+                  `WITHDRAWAL_REFERENCE_MISSING:${event.eventId}`,
+                );
+              }
+
+              const withdrawalId =
+                event.referenceId;
+
+              const withdrawal =
+                await db.withdrawal.findUnique({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+                });
+
+              if (!withdrawal) {
+                throw new Error(
+                  `WITHDRAWAL_NOT_FOUND:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.status ===
+                'FAILED'
+              ) {
+                break;
+              }
+
+              if (
+                withdrawal.status !==
+                'PROCESSING'
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_INVALID_RELEASE_STATE:${withdrawalId}:${withdrawal.status}`,
+                );
+              }
+
+              await db.withdrawal.update({
+                where: {
+                  id:
+                    withdrawalId,
+                },
+
+                data: {
+                  status:
+                    'FAILED',
+
+                  failureReason:
+                    withdrawal.failureReason ??
+                    'EXTERNAL_PAYOUT_FAILED',
+
+                  failedAt:
+                    new Date(
+                      event.occurredAt,
+                    ),
+                },
+              });
             }
 
             break;
