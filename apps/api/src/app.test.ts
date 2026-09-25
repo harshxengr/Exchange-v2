@@ -20,6 +20,10 @@ import type {
   EngineClientPort,
 } from './services/engineClient.js';
 
+import type {
+  RedisClient,
+} from '@exchange/messaging';
+
 import {
   MarketDataService,
 } from './services/marketDataService.js';
@@ -246,10 +250,20 @@ function createMockMarketData():
   } as unknown as MarketDataService;
 }
 
+function createMockRedis():
+  RedisClient {
+  return {
+    ping:
+      async () => 'PONG',
+
+  } as unknown as RedisClient;
+}
+
 function createTestApp() {
   return createApp(
     createMockEngineClient(),
     createMockMarketData(),
+    createMockRedis(),
   );
 }
 
