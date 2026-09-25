@@ -240,6 +240,46 @@ export async function readCommands(
     return result as CommandStreamBatch[];
 }
 
+export type ClaimedStreamBatch = {
+    nextId: string;
+    messages: CommandStreamMessage[];
+};
+
+export async function claimPendingCommands(
+    client: RedisClient,
+    consumer: string,
+    minIdleMs = 5_000,
+    startId = '0-0',
+    count = 10,
+): Promise<ClaimedStreamBatch> {
+    const result =
+        await client.xAutoClaim(
+            STREAMS.ENGINE_COMMANDS,
+            CONSUMER_GROUPS.ENGINE,
+            consumer,
+            minIdleMs,
+            startId,
+            {
+                COUNT:
+                    count,
+            },
+        );
+
+    const value =
+        result as unknown as {
+            nextId: string;
+            messages: CommandStreamMessage[];
+        };
+
+    return {
+        nextId:
+            value.nextId,
+
+        messages:
+            value.messages ?? [],
+    };
+}
+
 export async function readPendingCommands(
     client: RedisClient,
     consumer: string,
