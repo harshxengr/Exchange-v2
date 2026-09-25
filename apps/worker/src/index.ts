@@ -73,7 +73,7 @@ async function processEventMessage(
       !rawPayload
     ) {
       throw new Error(
-        \`EVENT_PAYLOAD_MISSING:\${messageId}\`,
+        `EVENT_PAYLOAD_MISSING:${messageId}`,
       );
     }
 
@@ -87,7 +87,7 @@ async function processEventMessage(
         ) as ExchangeEvent;
     } catch {
       throw new Error(
-        \`INVALID_EVENT_JSON:\${messageId}\`,
+        `INVALID_EVENT_JSON:${messageId}`,
       );
     }
 
@@ -155,10 +155,10 @@ async function consumeEvents(
 
   const consumerName =
     process.env.DATABASE_CONSUMER_NAME ??
-    \`database-\${process.pid}\`;
+    `database-${process.pid}`;
 
   console.log(
-    \`[worker] event consumer=\${consumerName}\`,
+    `[worker] event consumer=${consumerName}`,
   );
 
   /*
