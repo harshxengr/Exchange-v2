@@ -3,16 +3,16 @@ services:
     image: postgres:17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: exchange
-      POSTGRES_PASSWORD: exchange
-      POSTGRES_DB: exchange
+      POSTGRES_USER: ${POSTGRES_USER:-exchange}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-exchange}
+      POSTGRES_DB: ${POSTGRES_DB:-exchange}
     volumes:
       - exchange_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U exchange -d exchange"
+          "pg_isready -U ${POSTGRES_USER:-exchange} -d ${POSTGRES_DB:-exchange}"
         ]
       interval: 5s
       timeout: 5s
@@ -49,7 +49,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://exchange:exchange@postgres:5432/exchange
+      DATABASE_URL: postgresql://${POSTGRES_USER:-exchange}:${POSTGRES_PASSWORD:-exchange}@postgres:5432/${POSTGRES_DB:-exchange}
       REDIS_URL: redis://redis:6379
     command:
       [
@@ -72,7 +72,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://exchange:exchange@postgres:5432/exchange
+      DATABASE_URL: postgresql://${POSTGRES_USER:-exchange}:${POSTGRES_PASSWORD:-exchange}@postgres:5432/${POSTGRES_DB:-exchange}
       REDIS_URL: redis://redis:6379
       API_PORT: 4000
     depends_on:
@@ -117,7 +117,7 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://exchange:exchange@postgres:5432/exchange
+      DATABASE_URL: postgresql://${POSTGRES_USER:-exchange}:${POSTGRES_PASSWORD:-exchange}@postgres:5432/${POSTGRES_DB:-exchange}
       REDIS_URL: redis://redis:6379
       PAYOUT_PROVIDER: demo
       ALLOW_DEMO_PAYOUTS_IN_PRODUCTION: "true"
@@ -133,8 +133,8 @@ services:
       dockerfile: Dockerfile
       target: web
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:4000
-        NEXT_PUBLIC_WS_URL: ws://localhost:4000/ws
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000/ws}
     environment:
       NODE_ENV: production
     depends_on:
