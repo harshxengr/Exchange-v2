@@ -80,3 +80,75 @@ For a reversal demonstration:
 \`\`\`env
 DEMO_PAYOUT_MODE=REVERSE
 \`\`\`
+
+## Deployment
+
+This repository is designed as a production-style, fully local/resume deployment. It does not require a paid payout provider.
+
+### Docker
+
+Copy the example environment:
+
+\`\`\`bash
+cp .env.example .env
+\`\`\`
+
+Generate strong local secrets:
+
+\`\`\`bash
+openssl rand -hex 32
+\`\`\`
+
+Set the result as \`JWT_SECRET\` and set a separate random value as \`WITHDRAWAL_WEBHOOK_SECRET\`.
+
+The default payout provider is the built-in deterministic \`demo\` provider.
+
+Start the complete stack:
+
+\`\`\`bash
+docker compose -f docker-compose.prod.yml up -d --build
+\`\`\`
+
+The services are:
+
+- web: http://localhost:3000
+- api: http://localhost:4000
+- API readiness: http://localhost:4000/health/ready
+- postgres: internal Docker network
+- redis: internal Docker network
+- engine: internal Docker network
+- worker: internal Docker network
+
+Follow logs:
+
+\`\`\`bash
+docker compose -f docker-compose.prod.yml logs -f api engine worker
+\`\`\`
+
+Stop the stack:
+
+\`\`\`bash
+docker compose -f docker-compose.prod.yml down
+\`\`\`
+
+### CI
+
+Every push to \`main\` and every pull request runs:
+
+\`\`\`text
+pnpm install --frozen-lockfile
+        ↓
+workspace typecheck
+        ↓
+workspace build
+        ↓
+API tests
+        ↓
+engine tests
+        ↓
+worker tests
+\`\`\`
+
+### Important scope
+
+The exchange is production-style software for a resume/demo deployment. The default payout path is a deterministic local simulator and does not move real money. A real regulated financial service would additionally require external provider contracts, KYC/AML, custody controls, key management, compliance, operational monitoring, disaster recovery, independent security review, and other production controls that are intentionally outside this resume project.
