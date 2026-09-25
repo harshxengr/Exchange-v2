@@ -21,6 +21,8 @@ type WithdrawalRecord = {
   externalRef: string;
   providerRef:
     string | null;
+  failureReason:
+    string | null;
   status: string;
   attemptCount: number;
   nextAttemptAt:
@@ -192,15 +194,12 @@ export class WithdrawalProcessor {
           status:
             'PROCESSING',
 
-          attemptCount: {
-            lt:
-              this.maxAttempts,
-          },
-
           OR: [
             {
-              providerRef:
-                null,
+              failureReason: {
+                not:
+                  null,
+              },
 
               OR: [
                 {
@@ -218,15 +217,46 @@ export class WithdrawalProcessor {
             },
 
             {
-              providerRef: {
-                not:
-                  null,
+              failureReason:
+                null,
+
+              attemptCount: {
+                lt:
+                  this.maxAttempts,
               },
 
-              nextAttemptAt: {
-                lte:
-                  now,
-              },
+              OR: [
+                {
+                  providerRef:
+                    null,
+
+                  OR: [
+                    {
+                      nextAttemptAt:
+                        null,
+                    },
+
+                    {
+                      nextAttemptAt: {
+                        lte:
+                          now,
+                      },
+                    },
+                  ],
+                },
+
+                {
+                  providerRef: {
+                    not:
+                      null,
+                  },
+
+                  nextAttemptAt: {
+                    lte:
+                      now,
+                  },
+                },
+              ],
             },
           ],
         },
@@ -254,6 +284,22 @@ export class WithdrawalProcessor {
     withdrawal:
       WithdrawalRecord,
   ): Promise<void> {
+    /*
+     * A non-null failureReason means the provider operation
+     * is already terminal. The remaining work is to make sure
+     * the engine sees the deterministic FAIL_WITHDRAWAL command.
+     */
+    if (
+      withdrawal.failureReason
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        withdrawal.failureReason,
+      );
+
+      return;
+    }
+
     const claimed =
       await this.claimWithdrawal(
         withdrawal,
@@ -317,74 +363,90 @@ export class WithdrawalProcessor {
         ),
       );
 
-    const update =
-      await prisma.withdrawal.updateMany({
-        where: {
-          id:
-            withdrawal.id,
+    const claimed =
+      await prisma.$transaction(
+        async tx => {
+          const update =
+            await tx.withdrawal.updateMany({
+              where: {
+                id:
+                  withdrawal.id,
 
-          status:
-            'PROCESSING',
+                status:
+                  'PROCESSING',
 
-          attemptCount:
-            withdrawal.attemptCount,
+                failureReason:
+                  null,
 
-          providerRef:
-            withdrawal.providerRef,
+                attemptCount:
+                  withdrawal.attemptCount,
 
-          OR: [
-            {
-              nextAttemptAt:
-                null,
-            },
+                providerRef:
+                  withdrawal.providerRef,
 
-            {
-              nextAttemptAt: {
-                lte:
-                  now,
+                OR: [
+                  {
+                    nextAttemptAt:
+                      null,
+                  },
+
+                  {
+                    nextAttemptAt: {
+                      lte:
+                        now,
+                    },
+                  },
+                ],
               },
+
+              data: {
+                attemptCount:
+                  attemptNumber,
+
+                lastAttemptAt:
+                  now,
+
+                nextAttemptAt:
+                  leaseUntil,
+              },
+            });
+
+          if (
+            update.count !==
+            1
+          ) {
+            return false;
+          }
+
+          await tx.withdrawalAttempt.create({
+            data: {
+              withdrawalId:
+                withdrawal.id,
+
+              attemptNumber,
+
+              provider:
+                this.provider.providerName,
+
+              operation:
+                withdrawal.providerRef
+                  ? 'RECONCILE'
+                  : 'CREATE',
+
+              status:
+                'STARTED',
             },
-          ],
+          });
+
+          return true;
         },
-
-        data: {
-          attemptCount:
-            attemptNumber,
-
-          lastAttemptAt:
-            now,
-
-          nextAttemptAt:
-            leaseUntil,
-        },
-      });
+      );
 
     if (
-      update.count !==
-      1
+      !claimed
     ) {
       return null;
     }
-
-    await prisma.withdrawalAttempt.create({
-      data: {
-        withdrawalId:
-          withdrawal.id,
-
-        attemptNumber,
-
-        provider:
-          this.provider.providerName,
-
-        operation:
-          withdrawal.providerRef
-            ? 'RECONCILE'
-            : 'CREATE',
-
-        status:
-          'STARTED',
-      },
-    });
 
     return {
       ...withdrawal,
@@ -428,7 +490,13 @@ export class WithdrawalProcessor {
 
           data: {
             status:
-              'ACCEPTED',
+              result.status ===
+              'COMPLETED'
+                ? 'COMPLETED'
+                : result.status ===
+                  'FAILED'
+                  ? 'FAILED'
+                  : 'ACCEPTED',
 
             providerRef:
               result.providerRef,
@@ -445,14 +513,17 @@ export class WithdrawalProcessor {
             providerRef:
               result.providerRef,
 
-            nextAttemptAt:
+            failureReason:
               result.status ===
-              'COMPLETED'
-                ? now
-                : addMilliseconds(
-                    now,
-                    this.reconcileMs,
-                  ),
+              'FAILED'
+                ? 'PAYOUT_PROVIDER_FAILED'
+                : undefined,
+
+            nextAttemptAt:
+              addMilliseconds(
+                now,
+                this.retryMs,
+              ),
           },
         });
       },
@@ -463,7 +534,7 @@ export class WithdrawalProcessor {
       startedAt.getTime();
 
     console.log(
-      '[payout] provider accepted withdrawal',
+      '[payout] provider responded to withdrawal',
       {
         withdrawalId:
           withdrawal.id,
@@ -553,21 +624,24 @@ export class WithdrawalProcessor {
               result.providerRef ??
               providerRef,
 
-            nextAttemptAt:
-              result.status ===
-                'PROCESSING'
-                ? addMilliseconds(
-                    now,
-                    this.reconcileMs,
-                  )
-                : now,
-
             failureReason:
               result.status ===
               'FAILED'
                 ? result.reason ??
                   'PAYOUT_PROVIDER_FAILED'
                 : undefined,
+
+            nextAttemptAt:
+              result.status ===
+              'PROCESSING'
+                ? addMilliseconds(
+                    now,
+                    this.reconcileMs,
+                  )
+                : addMilliseconds(
+                    now,
+                    this.retryMs,
+                  ),
           },
         });
       },
@@ -649,15 +723,15 @@ export class WithdrawalProcessor {
         this.maxAttempts;
 
     const nextAttemptAt =
-      shouldFail
-        ? null
-        : addMilliseconds(
-            now,
-            exponentialBackoff(
+      addMilliseconds(
+        now,
+        shouldFail
+          ? this.retryMs
+          : exponentialBackoff(
               this.retryMs,
               withdrawal.attemptNumber,
             ),
-          );
+      );
 
     await prisma.$transaction(
       async tx => {
@@ -699,7 +773,7 @@ export class WithdrawalProcessor {
             failureReason:
               shouldFail
                 ? reason
-                : undefined,
+                : null,
 
             nextAttemptAt,
           },
@@ -770,6 +844,24 @@ export class WithdrawalProcessor {
           withdrawal.id,
       },
     );
+
+    await prisma.withdrawal.updateMany({
+      where: {
+        id:
+          withdrawal.id,
+
+        status:
+          'PROCESSING',
+      },
+
+      data: {
+        nextAttemptAt:
+          addMilliseconds(
+            new Date(),
+            this.retryMs,
+          ),
+      },
+    });
   }
 
   private async enqueueFailure(
@@ -818,5 +910,23 @@ export class WithdrawalProcessor {
           withdrawal.id,
       },
     );
+
+    await prisma.withdrawal.updateMany({
+      where: {
+        id:
+          withdrawal.id,
+
+        status:
+          'PROCESSING',
+      },
+
+      data: {
+        nextAttemptAt:
+          addMilliseconds(
+            new Date(),
+            this.retryMs,
+          ),
+      },
+    });
   }
 }
