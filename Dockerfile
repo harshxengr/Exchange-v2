@@ -51,7 +51,7 @@ CMD ["node", "apps/worker/dist/index.js"]
 FROM base AS web-build
 
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
-ARG NEXT_PUBLIC_WS_URL=ws://localhost:4001
+ARG NEXT_PUBLIC_WS_URL=ws://localhost:4000/ws
 
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
