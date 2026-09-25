@@ -187,6 +187,11 @@ export class WithdrawalProcessor {
           status:
             'PROCESSING',
 
+          attemptCount: {
+            lt:
+              this.maxAttempts,
+          },
+
           OR: [
             {
               providerRef:
@@ -244,17 +249,6 @@ export class WithdrawalProcessor {
     withdrawal:
       WithdrawalRecord,
   ): Promise<void> {
-    if (
-      withdrawal.attemptCount >=
-      this.maxAttempts
-    ) {
-      await this.markProviderRetryExhausted(
-        withdrawal,
-      );
-
-      return;
-    }
-
     const claimed =
       await this.claimWithdrawal(
         withdrawal,
@@ -486,6 +480,14 @@ export class WithdrawalProcessor {
     ) {
       await this.enqueueCompletion(
         withdrawal,
+      );
+    } else if (
+      result.status ===
+      'FAILED'
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        'PAYOUT_PROVIDER_FAILED',
       );
     }
   }
@@ -731,42 +733,6 @@ export class WithdrawalProcessor {
           now.getTime() -
           startedAt.getTime(),
       },
-    );
-  }
-
-  private async markProviderRetryExhausted(
-    withdrawal:
-      WithdrawalRecord,
-  ): Promise<void> {
-    await prisma.withdrawal.updateMany({
-      where: {
-        id:
-          withdrawal.id,
-
-        status:
-          'PROCESSING',
-
-        attemptCount:
-          withdrawal.attemptCount,
-
-        nextAttemptAt: {
-          lte:
-            new Date(),
-        },
-      },
-
-      data: {
-        nextAttemptAt:
-          null,
-
-        failureReason:
-          'PAYOUT_MAX_ATTEMPTS_EXCEEDED',
-      },
-    });
-
-    await this.enqueueFailure(
-      withdrawal,
-      'PAYOUT_MAX_ATTEMPTS_EXCEEDED',
     );
   }
 
