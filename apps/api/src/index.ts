@@ -37,6 +37,7 @@ const app =
   createApp(
     engineClient,
     marketData,
+    redis,
   );
 
 const server =
