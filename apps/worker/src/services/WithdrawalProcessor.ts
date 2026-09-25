@@ -849,6 +849,27 @@ export class WithdrawalProcessor {
         'id' | 'userId' | 'asset' | 'amount'
       >,
   ): Promise<void> {
+    await prisma.withdrawal.updateMany({
+      where: {
+        id:
+          withdrawal.id,
+
+        status:
+          'PROCESSING',
+      },
+
+      data: {
+        status:
+          'COMPLETING',
+
+        nextAttemptAt:
+          addMilliseconds(
+            new Date(),
+            this.retryMs,
+          ),
+      },
+    });
+
     await appendCommand(
       this.redis,
       {
@@ -871,7 +892,15 @@ export class WithdrawalProcessor {
           withdrawal.id,
       },
     );
+  }
 
+  private async enqueueReversal(
+    withdrawal:
+      Pick<
+        WithdrawalRecord,
+        'id' | 'userId' | 'asset' | 'amount'
+      >,
+  ): Promise<void> {
     await prisma.withdrawal.updateMany({
       where: {
         id:
@@ -882,6 +911,9 @@ export class WithdrawalProcessor {
       },
 
       data: {
+        status:
+          'REVERSING',
+
         nextAttemptAt:
           addMilliseconds(
             new Date(),
@@ -889,15 +921,7 @@ export class WithdrawalProcessor {
           ),
       },
     });
-  }
 
-  private async enqueueReversal(
-    withdrawal:
-      Pick<
-        WithdrawalRecord,
-        'id' | 'userId' | 'asset' | 'amount'
-      >,
-  ): Promise<void> {
     await appendCommand(
       this.redis,
       {
@@ -920,24 +944,6 @@ export class WithdrawalProcessor {
           withdrawal.id,
       },
     );
-
-    await prisma.withdrawal.updateMany({
-      where: {
-        id:
-          withdrawal.id,
-
-        status:
-          'PROCESSING',
-      },
-
-      data: {
-        nextAttemptAt:
-          addMilliseconds(
-            new Date(),
-            this.retryMs,
-          ),
-      },
-    });
   }
 
   private async enqueueFailure(
@@ -959,6 +965,9 @@ export class WithdrawalProcessor {
       },
 
       data: {
+        status:
+          'FAILING',
+
         failureReason:
           reason,
       },
@@ -987,22 +996,5 @@ export class WithdrawalProcessor {
       },
     );
 
-    await prisma.withdrawal.updateMany({
-      where: {
-        id:
-          withdrawal.id,
-
-        status:
-          'PROCESSING',
-      },
-
-      data: {
-        nextAttemptAt:
-          addMilliseconds(
-            new Date(),
-            this.retryMs,
-          ),
-      },
-    });
   }
 }
