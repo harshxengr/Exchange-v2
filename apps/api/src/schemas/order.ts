@@ -33,11 +33,7 @@ export const placeOrderSchema =
             ]),
 
         price:
-            positiveIntegerString
-                .optional()
-                .default(
-                    '0',
-                ),
+            positiveIntegerString,
 
         quantity:
             positiveIntegerString,
