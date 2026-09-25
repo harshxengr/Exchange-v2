@@ -68,11 +68,11 @@ jobs:
       - name: Apply database schema
         run: pnpm --filter @exchange/db db:deploy
 
-      - name: Typecheck
-        run: pnpm -r typecheck
-
       - name: Build
         run: pnpm -r build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
 
       - name: API tests
         run: pnpm --filter @exchange/api test
