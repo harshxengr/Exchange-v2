@@ -9,6 +9,7 @@ import {
   appendEvent,
   readCommands,
   readPendingCommands,
+  claimPendingCommands,
 } from '@exchange/messaging';
 
 import type {
@@ -56,7 +57,7 @@ export class EngineWorker {
   ) {
     this.consumerName =
       process.env.ENGINE_CONSUMER_NAME ??
-      'engine';
+      `engine-${process.pid}`;
 
     this.snapshots =
       new SnapshotStore(
@@ -178,41 +179,43 @@ export class EngineWorker {
   }
 
   private async processPendingCommands(): Promise<void> {
+    let cursor =
+      '0-0';
+
     while (true) {
-      const batches =
-        await readPendingCommands(
+      const claimed =
+        await claimPendingCommands(
           this.redis,
           this.consumerName,
+          5_000,
+          cursor,
           10,
         );
 
-      if (!batches) {
-        return;
-      }
-
-      let processed = 0;
-
       for (
-        const batch of batches
+        const message of
+        claimed.messages
       ) {
-        for (
-          const message of
-          batch.messages
-        ) {
-          await this.processMessage(
-            message.id,
-            message.message,
-          );
-
-          processed += 1;
-        }
+        await this.processMessage(
+          message.id,
+          message.message,
+        );
       }
 
-      if (processed === 0) {
+      cursor =
+        claimed.nextId;
+
+      if (
+        claimed.messages.length ===
+        0
+      ) {
         return;
       }
 
-      if (processed < 10) {
+      if (
+        claimed.messages.length <
+        10
+      ) {
         return;
       }
     }
