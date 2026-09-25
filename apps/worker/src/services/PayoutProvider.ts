@@ -122,22 +122,21 @@ function normalizeStatus(
   }
 
   if (
-    if (
-      status ===
-      'REVERSED'
-    ) {
-      return 'REVERSED';
-    }
+    status ===
+    'REVERSED'
+  ) {
+    return 'REVERSED';
+  }
 
-    if (
-      [
-        'FAILED',
-        'FAILURE',
-        'REJECTED',
-      ].includes(status)
-    ) {
-      return 'FAILED';
-    }
+  if (
+    [
+      'FAILED',
+      'FAILURE',
+      'REJECTED',
+    ].includes(status)
+  ) {
+    return 'FAILED';
+  }
 
   return 'PROCESSING';
 }
