@@ -340,6 +340,9 @@ export type AccountWithdrawal = {
   externalRef: string;
   providerRef: string | null;
   failureReason: string | null;
+  attemptCount: number;
+  lastAttemptAt: string | null;
+  nextAttemptAt: string | null;
   reservedAt: string | null;
   processingAt: string | null;
   completedAt: string | null;
@@ -462,6 +465,17 @@ export async function createAccountWithdrawal(
 
     failureReason:
       body.data.failureReason ??
+      null,
+
+    attemptCount:
+      body.data.attemptCount ?? 0,
+
+    lastAttemptAt:
+      body.data.lastAttemptAt ??
+      null,
+
+    nextAttemptAt:
+      body.data.nextAttemptAt ??
       null,
 
     reservedAt:

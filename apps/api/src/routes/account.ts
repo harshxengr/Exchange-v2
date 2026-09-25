@@ -739,6 +739,19 @@ export function createAccountRouter(
                                 failureReason:
                                     withdrawal.failureReason,
 
+                                attemptCount:
+                                    withdrawal.attemptCount,
+
+                                lastAttemptAt:
+                                    withdrawal.lastAttemptAt === null
+                                        ? null
+                                        : withdrawal.lastAttemptAt.toISOString(),
+
+                                nextAttemptAt:
+                                    withdrawal.nextAttemptAt === null
+                                        ? null
+                                        : withdrawal.nextAttemptAt.toISOString(),
+
                                 reservedAt:
                                     withdrawal.reservedAt === null
                                         ? null
