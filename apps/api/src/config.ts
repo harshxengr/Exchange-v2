@@ -136,7 +136,10 @@ export const config = {
     port:
         parsePort(
             'API_PORT',
-            4000,
+            parsePort(
+                'PORT',
+                4000,
+            ),
         ),
 
     redisUrl:
