@@ -447,6 +447,30 @@ export class MatchingEngine {
         );
     }
 
+    reverseWithdrawal(
+        userId: string,
+        asset: string,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            throw new Error(
+                'INVALID_WITHDRAWAL_AMOUNT',
+            );
+        }
+
+        /*
+         * A reversal happens after the external payout was
+         * already marked complete and the engine removed the
+         * amount from locked balance. Reversal therefore
+         * credits the returned funds back to available.
+         */
+        this.balances.credit(
+            userId,
+            asset,
+            amount,
+        );
+    }
+
     getOrder(orderId: string): Order | null {
         return this.orders.get(orderId) ?? null;
     }
