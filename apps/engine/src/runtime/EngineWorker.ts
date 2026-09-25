@@ -187,7 +187,7 @@ export class EngineWorker {
         await claimPendingCommands(
           this.redis,
           this.consumerName,
-          5_000,
+          60_000,
           cursor,
           10,
         );
