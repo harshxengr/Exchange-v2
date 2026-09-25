@@ -105,11 +105,26 @@ describe(
           1,
         );
 
+        const call =
+          fetchMock.mock.calls[0];
+
+        expect(
+          call,
+        ).toBeDefined();
+
+        if (
+          !call
+        ) {
+          throw new Error(
+            'Expected payout provider fetch call',
+          );
+        }
+
         const [
           requestUrl,
           requestInit,
         ] =
-          fetchMock.mock.calls[0];
+          call;
 
         expect(
           String(
