@@ -12,9 +12,37 @@ jobs:
   verify:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: exchange
+          POSTGRES_PASSWORD: exchange
+          POSTGRES_DB: exchange
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U exchange -d exchange"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     env:
       DATABASE_URL: postgresql://exchange:exchange@localhost:5432/exchange
       REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-only-jwt-secret-at-least-32-characters-long
+      CORS_ORIGIN: http://localhost:3000
+      WITHDRAWAL_WEBHOOK_SECRET: ci-only-withdrawal-webhook-secret
 
     steps:
       - name: Checkout
@@ -33,6 +61,12 @@ jobs:
 
       - name: Install
         run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @exchange/db db:generate
+
+      - name: Apply database schema
+        run: pnpm --filter @exchange/db db:deploy
 
       - name: Typecheck
         run: pnpm -r typecheck
