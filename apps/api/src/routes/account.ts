@@ -1234,7 +1234,7 @@ export function createAccountRouter(
 
                     try {
                         const client =
-                            await getRedis();
+                            redis;
 
                         await appendCommand(
                             client,
@@ -1336,7 +1336,7 @@ export function createAccountRouter(
 
                 try {
                     const client =
-                        await getRedis();
+                        redis;
 
                     await appendCommand(
                         client,
