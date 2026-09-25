@@ -348,10 +348,21 @@ export class WithdrawalProcessor {
       } catch (
         error
       ) {
-        await this.recordFailure(
-          claimed,
-          new Date(),
-          error,
+        console.error(
+          '[payout] completed withdrawal reconciliation failed',
+          {
+            withdrawalId:
+              withdrawal.id,
+
+            error:
+              error instanceof Error
+                ? error.message
+                : error,
+          },
+        );
+
+        await this.scheduleCompletedReconciliation(
+          withdrawal.id,
         );
       }
 
