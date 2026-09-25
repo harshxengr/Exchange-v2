@@ -192,8 +192,14 @@ export class WithdrawalProcessor {
     const withdrawals =
       await prisma.withdrawal.findMany({
         where: {
-          status:
-            'PROCESSING',
+          status: {
+            in: [
+              'PROCESSING',
+              'COMPLETING',
+              'FAILING',
+              'REVERSING',
+            ],
+          },
 
           OR: [
             {
@@ -285,10 +291,46 @@ export class WithdrawalProcessor {
     withdrawal:
       WithdrawalRecord,
   ): Promise<void> {
+    if (
+      withdrawal.status ===
+      'COMPLETING'
+    ) {
+      await this.enqueueCompletion(
+        withdrawal,
+      );
+
+      return;
+    }
+
+    if (
+      withdrawal.status ===
+      'FAILING'
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        withdrawal.failureReason ??
+          'PAYOUT_PROCESSOR_ERROR',
+      );
+
+      return;
+    }
+
+    if (
+      withdrawal.status ===
+      'REVERSING'
+    ) {
+      await this.enqueueReversal(
+        withdrawal,
+      );
+
+      return;
+    }
+
     /*
-     * A non-null failureReason means the provider operation
-     * is already terminal. The remaining work is to make sure
-     * the engine sees the deterministic FAIL_WITHDRAWAL command.
+     * A non-null failureReason while PROCESSING means the
+     * provider operation has already reached a terminal
+     * failure and the engine still needs the deterministic
+     * FAIL_WITHDRAWAL command.
      */
     if (
       withdrawal.failureReason
