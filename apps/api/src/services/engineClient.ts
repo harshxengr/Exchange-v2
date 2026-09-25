@@ -88,7 +88,7 @@ export class EngineClient
                 'INITIALIZE_USER' as const,
 
             commandId:
-                \`initialize-user:\${userId}:v1\`,
+                `initialize-user:${userId}:v1`,
 
             replyTo:
                 STREAMS.ENGINE_REPLIES,
@@ -257,7 +257,7 @@ export class EngineClient
         let cursor =
             afterId === null
                 ? '-'
-                : \`(\${afterId}\`;
+                : `(${afterId}`;
 
         while (
             Date.now() -
@@ -297,7 +297,7 @@ export class EngineClient
                         !payload
                     ) {
                         throw new Error(
-                            \`ENGINE_REPLY_PAYLOAD_MISSING:\${commandId}\`,
+                            `ENGINE_REPLY_PAYLOAD_MISSING:${commandId}`,
                         );
                     }
 
@@ -316,7 +316,7 @@ export class EngineClient
                     lastMessage
                 ) {
                     cursor =
-                        \`(\${lastMessage.id}\`;
+                        `(${lastMessage.id}`;
                 }
 
                 continue;
@@ -335,7 +335,7 @@ export class EngineClient
         }
 
         throw new Error(
-            \`ENGINE_REPLY_TIMEOUT:\${commandId}\`,
+            `ENGINE_REPLY_TIMEOUT:${commandId}`,
         );
     }
 }
