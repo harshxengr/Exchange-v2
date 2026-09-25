@@ -47,6 +47,9 @@ const DEFAULT_RECONCILE_MS =
 const DEFAULT_MAX_ATTEMPTS =
   10;
 
+const DEFAULT_COMPLETED_RECONCILE_MS =
+  30000;
+
 function positiveIntegerEnv(
   name: string,
   fallback: number,
@@ -136,6 +139,12 @@ export class WithdrawalProcessor {
       DEFAULT_MAX_ATTEMPTS,
     );
 
+  private readonly completedReconcileMs =
+    positiveIntegerEnv(
+      'PAYOUT_RECONCILE_COMPLETED_MS',
+      DEFAULT_COMPLETED_RECONCILE_MS,
+    );
+
   constructor(
     private readonly redis:
       RedisClient,
@@ -192,16 +201,99 @@ export class WithdrawalProcessor {
     const withdrawals =
       await prisma.withdrawal.findMany({
         where: {
-          status: {
-            in: [
-              'PROCESSING',
-              'COMPLETING',
-              'FAILING',
-              'REVERSING',
-            ],
-          },
-
           OR: [
+            {
+              status:
+                'COMPLETED',
+
+              providerRef: {
+                not:
+                  null,
+              },
+
+              nextAttemptAt: {
+                lte:
+                  now,
+              },
+            },
+
+            {
+              status: {
+                in: [
+                  'PROCESSING',
+                  'COMPLETING',
+                  'FAILING',
+                  'REVERSING',
+                ],
+              },
+
+              OR: [
+                {
+                  failureReason: {
+                    not:
+                      null,
+                  },
+
+                  OR: [
+                    {
+                      nextAttemptAt:
+                        null,
+                    },
+
+                    {
+                      nextAttemptAt: {
+                        lte:
+                          now,
+                      },
+                    },
+                  ],
+                },
+
+                {
+                  failureReason:
+                    null,
+
+                  attemptCount: {
+                    lt:
+                      this.maxAttempts,
+                  },
+
+                  OR: [
+                    {
+                      providerRef:
+                        null,
+
+                      OR: [
+                        {
+                          nextAttemptAt:
+                            null,
+                        },
+
+                        {
+                          nextAttemptAt: {
+                            lte:
+                              now,
+                          },
+                        },
+                      ],
+                    },
+
+                    {
+                      providerRef: {
+                        not:
+                          null,
+                      },
+
+                      nextAttemptAt: {
+                        lte:
+                          now,
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
             {
               failureReason: {
                 not:
@@ -291,6 +383,45 @@ export class WithdrawalProcessor {
     withdrawal:
       WithdrawalRecord,
   ): Promise<void> {
+    if (
+      withdrawal.status ===
+      'COMPLETED'
+    ) {
+      if (
+        !withdrawal.providerRef
+      ) {
+        return;
+      }
+
+      const claimed =
+        await this.claimWithdrawal(
+          withdrawal,
+        );
+
+      if (
+        !claimed
+      ) {
+        return;
+      }
+
+      try {
+        await this.reconcile(
+          claimed,
+          new Date(),
+        );
+      } catch (
+        error
+      ) {
+        await this.recordFailure(
+          claimed,
+          new Date(),
+          error,
+        );
+      }
+
+      return;
+    }
+
     if (
       withdrawal.status ===
       'COMPLETING'
@@ -416,7 +547,7 @@ export class WithdrawalProcessor {
                   withdrawal.id,
 
                 status:
-                  'PROCESSING',
+                  withdrawal.status,
 
                 failureReason:
                   null,
@@ -665,10 +796,16 @@ export class WithdrawalProcessor {
                     now,
                     this.reconcileMs,
                   )
-                : addMilliseconds(
-                    now,
-                    this.retryMs,
-                  ),
+                : result.status ===
+                  'COMPLETED'
+                  ? addMilliseconds(
+                      now,
+                      this.completedReconcileMs,
+                    )
+                  : addMilliseconds(
+                      now,
+                      this.retryMs,
+                    ),
 
             ...(result.status ===
             'FAILED'
@@ -715,7 +852,9 @@ export class WithdrawalProcessor {
       Pick<
         WithdrawalRecord,
         'id' | 'userId' | 'asset' | 'amount'
-      >,
+      > & {
+        status?: string;
+      },
     status:
       PayoutStatus,
     reason:
@@ -725,6 +864,17 @@ export class WithdrawalProcessor {
       status ===
       'COMPLETED'
     ) {
+      if (
+        withdrawal.status ===
+        'COMPLETED'
+      ) {
+        await this.scheduleCompletedReconciliation(
+          withdrawal.id,
+        );
+
+        return;
+      }
+
       await this.enqueueCompletion(
         withdrawal,
       );
@@ -936,6 +1086,29 @@ export class WithdrawalProcessor {
     );
   }
 
+  private async scheduleCompletedReconciliation(
+    withdrawalId:
+      string,
+  ): Promise<void> {
+    await prisma.withdrawal.updateMany({
+      where: {
+        id:
+          withdrawalId,
+
+        status:
+          'COMPLETED',
+      },
+
+      data: {
+        nextAttemptAt:
+          addMilliseconds(
+            new Date(),
+            this.completedReconcileMs,
+          ),
+      },
+    });
+  }
+
   private async enqueueReversal(
     withdrawal:
       Pick<
@@ -948,8 +1121,12 @@ export class WithdrawalProcessor {
         id:
           withdrawal.id,
 
-        status:
-          'PROCESSING',
+        status: {
+          in: [
+            'PROCESSING',
+            'COMPLETED',
+          ],
+        },
       },
 
       data: {
