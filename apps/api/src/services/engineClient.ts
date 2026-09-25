@@ -15,6 +15,15 @@ import {
     STREAMS,
 } from '@exchange/messaging';
 
+type EngineReplyStreamMessage = {
+    id: string;
+
+    message: {
+        commandId?: string;
+        payload?: string;
+    };
+};
+
 export type PlaceOrderInput = {
     userId: string;
 
@@ -22,7 +31,9 @@ export type PlaceOrderInput = {
 
     orderId: string;
 
-    side: 'BUY' | 'SELL';
+    side:
+        | 'BUY'
+        | 'SELL';
 
     price: string;
 
@@ -45,18 +56,21 @@ export interface EngineClientPort {
     ): Promise<void>;
 
     placeOrder(
-        input: PlaceOrderInput,
+        input:
+            PlaceOrderInput,
     ): Promise<EngineReply>;
 
     cancelOrder(
-        input: CancelOrderInput,
+        input:
+            CancelOrderInput,
     ): Promise<EngineReply>;
 }
 
 export class EngineClient
     implements EngineClientPort {
     constructor(
-        private readonly redis: RedisClient,
+        private readonly redis:
+            RedisClient,
     ) { }
 
     async ensureUserInitialized(
@@ -69,14 +83,12 @@ export class EngineClient
                 },
             });
 
-        const commandId =
-            `initialize-user:${userId}:v1`;
-
         const command = {
             type:
                 'INITIALIZE_USER' as const,
 
-            commandId,
+            commandId:
+                \`initialize-user:\${userId}:v1\`,
 
             replyTo:
                 STREAMS.ENGINE_REPLIES,
@@ -93,6 +105,7 @@ export class EngineClient
                             {
                                 available:
                                     balance.available.toString(),
+
                                 locked:
                                     balance.locked.toString(),
                             },
@@ -101,13 +114,6 @@ export class EngineClient
                 ),
         };
 
-        /*
-         * Redis Streams preserve insertion order for the
-         * engine consumer. Appending initialization immediately
-         * before the business command therefore guarantees that
-         * a user with durable DB balances is known to the engine
-         * before the order/withdrawal is evaluated.
-         */
         await appendCommand(
             this.redis,
             command,
@@ -115,10 +121,14 @@ export class EngineClient
     }
 
     async placeOrder(
-        input: PlaceOrderInput,
+        input:
+            PlaceOrderInput,
     ): Promise<EngineReply> {
         const commandId =
             crypto.randomUUID();
+
+        const replyStartId =
+            await this.latestReplyId();
 
         const command = {
             type:
@@ -166,16 +176,22 @@ export class EngineClient
 
         return this.waitForReply(
             commandId,
+            replyStartId,
         );
     }
 
     async cancelOrder(
-        input: CancelOrderInput,
+        input:
+            CancelOrderInput,
     ): Promise<EngineReply> {
         const commandId =
             crypto.randomUUID();
 
-        const command: CancelOrderCommand = {
+        const replyStartId =
+            await this.latestReplyId();
+
+        const command:
+            CancelOrderCommand = {
             type:
                 'CANCEL_ORDER',
 
@@ -201,51 +217,115 @@ export class EngineClient
 
         return this.waitForReply(
             commandId,
+            replyStartId,
+        );
+    }
+
+    private async latestReplyId():
+        Promise<string | null> {
+        const messages =
+            await this.redis.xRevRange(
+                STREAMS.ENGINE_REPLIES,
+                '+',
+                '-',
+                {
+                    COUNT:
+                        1,
+                },
+            ) as unknown as
+                EngineReplyStreamMessage[];
+
+        return (
+            messages[0]?.id ??
+            null
         );
     }
 
     private async waitForReply(
-        commandId: string,
-        timeoutMs = 5000,
+        commandId:
+            string,
+
+        afterId:
+            string | null,
+
+        timeoutMs =
+            5000,
     ): Promise<EngineReply> {
         const startedAt =
             Date.now();
 
+        let cursor =
+            afterId === null
+                ? '-'
+                : \`(\${afterId}\`;
+
         while (
-            Date.now() - startedAt <
+            Date.now() -
+            startedAt <
             timeoutMs
         ) {
             const messages =
                 await this.redis.xRange(
                     STREAMS.ENGINE_REPLIES,
-                    '-',
+                    cursor,
                     '+',
-                );
+                    {
+                        COUNT:
+                            100,
+                    },
+                ) as unknown as
+                    EngineReplyStreamMessage[];
 
-            for (
-                const message of messages
+            if (
+                messages.length > 0
             ) {
-                if (
-                    message.message.commandId !==
-                    commandId
+                for (
+                    const message
+                    of messages
                 ) {
-                    continue;
+                    if (
+                        message.message.commandId !==
+                        commandId
+                    ) {
+                        continue;
+                    }
+
+                    const payload =
+                        message.message.payload;
+
+                    if (
+                        !payload
+                    ) {
+                        throw new Error(
+                            \`ENGINE_REPLY_PAYLOAD_MISSING:\${commandId}\`,
+                        );
+                    }
+
+                    return JSON.parse(
+                        payload,
+                    ) as EngineReply;
                 }
 
-                const payload =
-                    message.message.payload;
+                const lastMessage =
+                    messages[
+                        messages.length -
+                        1
+                    ];
 
-                if (!payload) {
-                    continue;
+                if (
+                    lastMessage
+                ) {
+                    cursor =
+                        \`(\${lastMessage.id}\`;
                 }
 
-                return JSON.parse(
-                    payload,
-                ) as EngineReply;
+                continue;
             }
 
             await new Promise(
-                (resolve) => {
+                (
+                    resolve,
+                ) => {
                     setTimeout(
                         resolve,
                         50,
@@ -255,7 +335,7 @@ export class EngineClient
         }
 
         throw new Error(
-            `ENGINE_REPLY_TIMEOUT:${commandId}`,
+            \`ENGINE_REPLY_TIMEOUT:\${commandId}\`,
         );
     }
 }
