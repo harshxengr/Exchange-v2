@@ -1,7 +1,3 @@
-import type {
-  Withdrawal,
-} from '@exchange/db';
-
 export type PayoutStatus =
   | 'PROCESSING'
   | 'COMPLETED'
@@ -11,6 +7,14 @@ export type PayoutRequest = {
   withdrawalId: string;
   asset: string;
   amount: string;
+  destination: string;
+  externalRef: string;
+};
+
+type WithdrawalForPayout = {
+  id: string;
+  asset: string;
+  amount: bigint;
   destination: string;
   externalRef: string;
 };
@@ -291,14 +295,7 @@ export class HttpPayoutProvider {
   }
 
   async createPayout(
-    withdrawal: Pick<
-      Withdrawal,
-      | 'id'
-      | 'asset'
-      | 'amount'
-      | 'destination'
-      | 'externalRef'
-    >,
+    withdrawal: WithdrawalForPayout,
   ): Promise<PayoutCreateResult> {
     if (
       !this.enabled
