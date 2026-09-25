@@ -14,6 +14,14 @@ import {
   EventHandler,
 } from './handlers/EventHandler.js';
 
+import {
+  HttpPayoutProvider,
+} from './services/PayoutProvider.js';
+
+import {
+  WithdrawalProcessor,
+} from './services/WithdrawalProcessor.js';
+
 /*
  * node-redis has a very broad inferred return type
  * for xReadGroup() in this monorepo.
@@ -54,14 +62,14 @@ type EventStreamBatch = {
     EventStreamMessage[];
 };
 
-async function main(): Promise<void> {
-  const redis =
-    createRedisClient();
-
-  await connectRedis(
-    redis,
-  );
-
+async function consumeEvents(
+  redis:
+    ReturnType<
+      typeof createRedisClient
+    >,
+  handler:
+    EventHandler,
+): Promise<void> {
   /*
    * Make sure the database consumer group exists.
    */
@@ -71,15 +79,12 @@ async function main(): Promise<void> {
     CONSUMER_GROUPS.PERSISTENCE,
   );
 
-  const handler =
-    new EventHandler();
-
   const consumerName =
     process.env.DATABASE_CONSUMER_NAME ??
     `database-${process.pid}`;
 
   console.log(
-    `[worker] consumer=${consumerName}`,
+    `[worker] event consumer=${consumerName}`,
   );
 
   while (true) {
@@ -187,14 +192,6 @@ async function main(): Promise<void> {
            * ---------------------------------------------------
            * 3. Persist into PostgreSQL
            * ---------------------------------------------------
-           *
-           * EventHandler handles:
-           *
-           *   - database transaction
-           *   - event idempotency
-           *   - order persistence
-           *   - trade persistence
-           *   - balance persistence
            */
           await handler.handle(
             event,
@@ -253,6 +250,49 @@ async function main(): Promise<void> {
       }
     }
   }
+}
+
+async function main(): Promise<void> {
+  const redis =
+    createRedisClient();
+
+  await connectRedis(
+    redis,
+  );
+
+  const handler =
+    new EventHandler();
+
+  const payoutProvider =
+    new HttpPayoutProvider();
+
+  const withdrawalProcessor =
+    new WithdrawalProcessor(
+      redis,
+      payoutProvider,
+    );
+
+  /*
+   * The persistence consumer and payout processor run
+   * independently:
+   *
+   *   exchange:events
+   *        -> EventHandler -> PostgreSQL
+   *
+   *   PROCESSING withdrawals
+   *        -> provider -> reconciliation
+   *
+   * A provider outage therefore must not block normal
+   * event persistence.
+   */
+  await Promise.all([
+    consumeEvents(
+      redis,
+      handler,
+    ),
+
+    withdrawalProcessor.run(),
+  ]);
 }
 
 main().catch(
