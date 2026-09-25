@@ -8,9 +8,10 @@ import {
 
 import {
     appendCommand,
-    connectRedis,
-    createRedisClient,
-    type RedisClient,
+} from '@exchange/messaging';
+
+import type {
+    RedisClient,
 } from '@exchange/messaging';
 
 import {
@@ -125,42 +126,15 @@ function normalizeExternalRef(
     return reference;
 }
 
-function createAccountRedis(): RedisClient {
-    const client =
-        createRedisClient();
-
-    return client;
-}
-
 export function createAccountRouter(
     marketData:
         MarketDataService,
+
+    redis:
+        RedisClient,
 ): Router {
     const router =
         Router();
-
-    const redis =
-        createAccountRedis();
-
-    let redisConnectPromise:
-        Promise<void> | null = null;
-
-    async function getRedis(): Promise<RedisClient> {
-        if (!redis.isOpen) {
-            redisConnectPromise ??=
-                connectRedis(
-                    redis,
-                ).finally(
-                    () => {
-                        redisConnectPromise = null;
-                    },
-                );
-
-            await redisConnectPromise;
-        }
-
-        return redis;
-    }
 
     /*
      * GET /api/v1/account/balances
@@ -599,7 +573,7 @@ export function createAccountRouter(
 
                 try {
                     const client =
-                        await getRedis();
+                        redis;
 
                     await appendCommand(
                         client,
@@ -1035,7 +1009,7 @@ export function createAccountRouter(
 
                 try {
                     const client =
-                        await getRedis();
+                        redis;
 
                     await appendCommand(
                         client,

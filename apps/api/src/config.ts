@@ -26,38 +26,116 @@ function required(
     return value;
 }
 
-/*
- * JWT_SECRET is mandatory in production.
- *
- * For local development and tests, we use a
- * development-only fallback so that unit tests
- * do not depend on a developer machine's .env.
- *
- * NEVER use this fallback in production.
- */
-function getJwtSecret(): string {
+function requiredProductionSecret(
+    name: string,
+    minimumLength: number,
+): string {
     const value =
-        process.env.JWT_SECRET;
+        process.env[name];
 
-    if (value) {
-        return value;
+    if (!value) {
+        if (isProduction) {
+            throw new Error(
+                `${name} is not configured`,
+            );
+        }
+
+        return `exchange-development-only-${name.toLowerCase()}`;
     }
 
-    if (isProduction) {
+    if (
+        isProduction &&
+        value.length < minimumLength
+    ) {
         throw new Error(
-            'JWT_SECRET is not configured',
+            `${name} must be at least ${minimumLength} characters in production`,
         );
     }
 
-    return 'exchange-development-only-jwt-secret';
+    return value;
 }
+
+function parsePort(
+    name: string,
+    fallback: number,
+): number {
+    const value =
+        Number(
+            process.env[name] ??
+            fallback,
+        );
+
+    if (
+        !Number.isInteger(
+            value,
+        ) ||
+        value < 1 ||
+        value > 65535
+    ) {
+        throw new Error(
+            `${name} must be a valid TCP port`,
+        );
+    }
+
+    return value;
+}
+
+function getCorsOrigins():
+    string[] {
+    const raw =
+        process.env.CORS_ORIGIN ??
+        'http://localhost:3000';
+
+    const origins =
+        raw
+            .split(',')
+            .map(
+                origin =>
+                    origin.trim(),
+            )
+            .filter(Boolean);
+
+    if (
+        origins.length ===
+        0
+    ) {
+        throw new Error(
+            'CORS_ORIGIN must contain at least one origin',
+        );
+    }
+
+    if (
+        isProduction &&
+        origins.some(
+            origin =>
+                origin.includes(
+                    'localhost',
+                ),
+        )
+    ) {
+        throw new Error(
+            'CORS_ORIGIN must not contain localhost in production',
+        );
+    }
+
+    return origins;
+}
+
+const jwtSecret =
+    requiredProductionSecret(
+        'JWT_SECRET',
+        32,
+    );
+
+const corsOrigins =
+    getCorsOrigins();
 
 export const config = {
     nodeEnv,
 
     port:
-        Number(
-            process.env.API_PORT ??
+        parsePort(
+            'API_PORT',
             4000,
         ),
 
@@ -66,12 +144,12 @@ export const config = {
             'REDIS_URL',
         ),
 
-    corsOrigin:
-        process.env.CORS_ORIGIN ??
-        'http://localhost:3000',
+    corsOrigins,
 
-    jwtSecret:
-        getJwtSecret(),
+    corsOrigin:
+        corsOrigins[0]!,
+
+    jwtSecret,
 
     jwtExpiresIn:
         process.env.JWT_EXPIRES_IN ??

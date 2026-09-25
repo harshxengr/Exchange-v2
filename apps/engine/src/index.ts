@@ -54,10 +54,11 @@ async function main(): Promise<void> {
         engine.registerMarket(market);
     }
 
-    console.log(
-        '[engine] starting',
-    );
-
+    /*
+     * The runtime stays independent of persistence.
+     *
+     * Markets are currently loaded from the local demo registry.
+     */
     /*
      * We'll register real markets from
      * database configuration later.

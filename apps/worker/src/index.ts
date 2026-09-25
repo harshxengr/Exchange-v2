@@ -3,6 +3,7 @@ import type {
 } from '@exchange/messaging';
 
 import {
+  claimPendingEvents,
   connectRedis,
   createRedisClient,
   ensureConsumerGroup,
@@ -30,30 +31,6 @@ import {
   WithdrawalProcessor,
 } from './services/WithdrawalProcessor.js';
 
-/*
- * node-redis has a very broad inferred return type
- * for xReadGroup() in this monorepo.
- *
- * The actual runtime shape we use is:
- *
- * [
- *   {
- *     name: string,
- *     messages: [
- *       {
- *         id: string,
- *         message: {
- *           payload: string
- *         }
- *       }
- *     ]
- *   }
- * ]
- *
- * Keep this assertion at the Redis infrastructure
- * boundary instead of leaking node-redis internals
- * through the worker.
- */
 type EventStreamMessage = {
   id: string;
 
@@ -70,17 +47,106 @@ type EventStreamBatch = {
     EventStreamMessage[];
 };
 
+type WorkerRedis =
+  ReturnType<
+    typeof createRedisClient
+  >;
+
+async function processEventMessage(
+  redis:
+    WorkerRedis,
+
+  handler:
+    EventHandler,
+
+  messageId:
+    string,
+
+  payload:
+    Record<string, string>,
+): Promise<void> {
+  try {
+    const rawPayload =
+      payload.payload;
+
+    if (
+      !rawPayload
+    ) {
+      throw new Error(
+        \`EVENT_PAYLOAD_MISSING:\${messageId}\`,
+      );
+    }
+
+    let event:
+      ExchangeEvent;
+
+    try {
+      event =
+        JSON.parse(
+          rawPayload,
+        ) as ExchangeEvent;
+    } catch {
+      throw new Error(
+        \`INVALID_EVENT_JSON:\${messageId}\`,
+      );
+    }
+
+    await handler.handle(
+      event,
+    );
+
+    /*
+     * ACK only after the database transaction
+     * has committed successfully.
+     */
+    await redis.xAck(
+      STREAMS.EVENTS,
+      CONSUMER_GROUPS.PERSISTENCE,
+      messageId,
+    );
+
+    console.log(
+      '[worker] event processed',
+      {
+        streamId:
+          messageId,
+
+        eventId:
+          event.eventId,
+
+        type:
+          event.type,
+      },
+    );
+  } catch (
+    error
+  ) {
+    /*
+     * Never ACK a failed event. It remains pending
+     * and will be reclaimed after the idle lease.
+     */
+    console.error(
+      '[worker] event processing failed',
+      {
+        streamId:
+          messageId,
+
+        error:
+          error instanceof Error
+            ? error.message
+            : error,
+      },
+    );
+  }
+}
+
 async function consumeEvents(
   redis:
-    ReturnType<
-      typeof createRedisClient
-    >,
+    WorkerRedis,
+
   handler:
     EventHandler,
 ): Promise<void> {
-  /*
-   * Make sure the database consumer group exists.
-   */
   await ensureConsumerGroup(
     redis,
     STREAMS.EVENTS,
@@ -89,22 +155,60 @@ async function consumeEvents(
 
   const consumerName =
     process.env.DATABASE_CONSUMER_NAME ??
-    `database-${process.pid}`;
+    \`database-\${process.pid}\`;
 
   console.log(
-    `[worker] event consumer=${consumerName}`,
+    \`[worker] event consumer=\${consumerName}\`,
   );
 
+  /*
+   * Recover pending events that were owned by a
+   * worker process that died.
+   */
+  let claimCursor =
+    '0-0';
+
   while (true) {
-    /*
-     * ---------------------------------------------------------
-     * Read new events from Redis Streams.
-     * ---------------------------------------------------------
-     *
-     * ">" means:
-     * give this consumer only messages that have not
-     * previously been delivered to a consumer in this group.
-     */
+    const claimed =
+      await claimPendingEvents(
+        redis,
+        consumerName,
+        60_000,
+        claimCursor,
+        10,
+      );
+
+    for (
+      const message of
+      claimed.messages
+    ) {
+      await processEventMessage(
+        redis,
+        handler,
+        message.id,
+        message.message,
+      );
+    }
+
+    claimCursor =
+      claimed.nextId;
+
+    if (
+      claimed.messages.length ===
+      0
+    ) {
+      break;
+    }
+
+    if (
+      claimed.messages.length <
+      10
+    ) {
+      break;
+    }
+  }
+
+  while (true) {
     const rawBatches =
       await redis.xReadGroup(
         CONSUMER_GROUPS.PERSISTENCE,
@@ -127,12 +231,6 @@ async function consumeEvents(
         },
       );
 
-    /*
-     * node-redis's inferred type is too broad here.
-     *
-     * We know the actual stream response shape, so narrow
-     * it once at the infrastructure boundary.
-     */
     const batches =
       rawBatches as unknown as
         EventStreamBatch[] |
@@ -140,7 +238,8 @@ async function consumeEvents(
 
     if (
       !batches ||
-      batches.length === 0
+      batches.length ===
+      0
     ) {
       continue;
     }
@@ -149,112 +248,16 @@ async function consumeEvents(
       const batch
       of batches
     ) {
-      if (
-        !batch.messages ||
-        batch.messages.length === 0
-      ) {
-        continue;
-      }
-
       for (
         const message
         of batch.messages
       ) {
-        try {
-          /*
-           * ---------------------------------------------------
-           * 1. Read payload
-           * ---------------------------------------------------
-           */
-          const rawPayload =
-            message.message.payload;
-
-          if (
-            !rawPayload
-          ) {
-            throw new Error(
-              `EVENT_PAYLOAD_MISSING:${message.id}`,
-            );
-          }
-
-          /*
-           * ---------------------------------------------------
-           * 2. Parse event
-           * ---------------------------------------------------
-           */
-          let event:
-            ExchangeEvent;
-
-          try {
-            event =
-              JSON.parse(
-                rawPayload,
-              ) as ExchangeEvent;
-          } catch {
-            throw new Error(
-              `INVALID_EVENT_JSON:${message.id}`,
-            );
-          }
-
-          /*
-           * ---------------------------------------------------
-           * 3. Persist into PostgreSQL
-           * ---------------------------------------------------
-           */
-          await handler.handle(
-            event,
-          );
-
-          /*
-           * ---------------------------------------------------
-           * 4. ACK ONLY AFTER DB COMMIT
-           * ---------------------------------------------------
-           */
-          await redis.xAck(
-            STREAMS.EVENTS,
-            CONSUMER_GROUPS.PERSISTENCE,
-            message.id,
-          );
-
-          console.log(
-            '[worker] event processed',
-            {
-              streamId:
-                message.id,
-
-              eventId:
-                event.eventId,
-
-              type:
-                event.type,
-            },
-          );
-        } catch (
-          error
-        ) {
-          /*
-           * -------------------------------------------------
-           * IMPORTANT
-           *
-           * Never ACK failed events.
-           *
-           * Redis keeps the event pending so it can be
-           * recovered instead of silently losing it.
-           * -------------------------------------------------
-           */
-          console.error(
-            '[worker] event processing failed',
-            {
-              streamId:
-                message.id,
-
-              error:
-                error instanceof Error
-                  ? error.message
-                  : error,
-            },
-          );
-        }
+        await processEventMessage(
+          redis,
+          handler,
+          message.id,
+          message.message,
+        );
       }
     }
   }
@@ -277,6 +280,22 @@ async function main(): Promise<void> {
       'demo'
     ).trim().toLowerCase();
 
+  if (
+    (
+      process.env.NODE_ENV ??
+      'development'
+    ) ===
+      'production' &&
+    payoutProviderName ===
+      'demo' &&
+    process.env.ALLOW_DEMO_PAYOUTS_IN_PRODUCTION !==
+      'true'
+  ) {
+    throw new Error(
+      'DEMO_PAYOUT_PROVIDER_DISABLED_IN_PRODUCTION',
+    );
+  }
+
   const payoutProvider =
     payoutProviderName ===
       'razorpayx'
@@ -292,19 +311,6 @@ async function main(): Promise<void> {
       payoutProvider,
     );
 
-  /*
-   * The persistence consumer and payout processor run
-   * independently:
-   *
-   *   exchange:events
-   *        -> EventHandler -> PostgreSQL
-   *
-   *   PROCESSING withdrawals
-   *        -> provider -> reconciliation
-   *
-   * A provider outage therefore must not block normal
-   * event persistence.
-   */
   await Promise.all([
     consumeEvents(
       redis,

@@ -1,35 +1,37 @@
 {
-    "name": "@exchange/db",
-    "version": "1.0.0",
-    "private": true,
-    "type": "module",
-    "main": "./src/index.ts",
-    "types": "./src/index.ts",
-    "exports": {
-        ".": {
-            "types": "./src/index.ts",
-            "import": "./src/index.ts"
-        }
-    },
-    "scripts": {
-        "db:generate": "prisma generate",
-        "db:migrate": "prisma migrate dev",
-        "db:deploy": "prisma migrate deploy",
-        "db:studio": "prisma studio",
-        "db:push": "prisma db push",
-        "typecheck": "tsc --noEmit",
-        "test-client": "tsx src/test-client.ts"
-    },
-    "dependencies": {
-        "@prisma/adapter-pg": "^7.10.0",
-        "@prisma/client": "7.10.0",
-        "pg": "^8.23.0"
-    },
-    "devDependencies": {
-        "@types/node": "^24.0.0",
-        "@types/pg": "^8.0.0",
-        "dotenv": "^17.0.0",
-        "prisma": "^7.10.0",
-        "tsx": "^4.23.13"
+  "name": "@exchange/db",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "scripts": {
+    "build": "prisma generate && tsc",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy && pnpm run db:seed",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "typecheck": "tsc --noEmit",
+    "test-client": "tsx src/test-client.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "7.10.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.0.0",
+    "dotenv": "^17.0.0",
+    "prisma": "^7.10.0",
+    "tsx": "^4.23.13"
+  }
 }

@@ -2,6 +2,21 @@ import {
     z,
 } from 'zod';
 
+const positiveIntegerString =
+    z
+        .string()
+        .regex(
+            /^d+$/,
+            'value must be a positive integer string',
+        )
+        .refine(
+            value =>
+                !/^0+$/.test(
+                    value,
+                ),
+            'value must be greater than zero',
+        );
+
 export const placeOrderSchema =
     z.object({
         marketId:
@@ -18,23 +33,15 @@ export const placeOrderSchema =
             ]),
 
         price:
-            z
-                .string()
-                .regex(
-                    /^\d+(\.\d+)?$/,
-                    'price must be a positive numeric string',
-                ),
+            positiveIntegerString,
 
         quantity:
-            z
-                .string()
-                .regex(
-                    /^\d+(\.\d+)?$/,
-                    'quantity must be a positive numeric string',
-                ),
+            positiveIntegerString,
 
         postOnly:
-            z.boolean(),
+            z
+                .boolean()
+                .default(false),
     });
 
 export const cancelOrderSchema =

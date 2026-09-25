@@ -2,6 +2,10 @@ import express from 'express';
 
 import cors from 'cors';
 
+import type {
+  RedisClient,
+} from '@exchange/messaging';
+
 import {
   config,
 } from './config.js';
@@ -52,6 +56,9 @@ export function createApp(
 
   marketData:
     MarketDataService,
+
+  redis:
+    RedisClient,
 ) {
   const app =
     express();
@@ -60,13 +67,81 @@ export function createApp(
     'x-powered-by',
   );
 
+  app.set(
+    'trust proxy',
+    1,
+  );
+
+  app.use(
+    (
+      _req,
+      res,
+      next,
+    ) => {
+      res.setHeader(
+        'X-Content-Type-Options',
+        'nosniff',
+      );
+
+      res.setHeader(
+        'X-Frame-Options',
+        'DENY',
+      );
+
+      res.setHeader(
+        'Referrer-Policy',
+        'no-referrer',
+      );
+
+      res.setHeader(
+        'Permissions-Policy',
+        'camera=(), microphone=(), geolocation=()',
+      );
+
+      if (
+        config.nodeEnv ===
+        'production'
+      ) {
+        res.setHeader(
+          'Strict-Transport-Security',
+          'max-age=31536000; includeSubDomains',
+        );
+      }
+
+      next();
+    },
+  );
+
   app.use(
     cors({
       origin:
-        config.corsOrigin,
+        (
+          origin,
+          callback,
+        ) => {
+          if (
+            !origin ||
+            config.corsOrigins.includes(
+              origin,
+            )
+          ) {
+            callback(
+              null,
+              true,
+            );
+
+            return;
+          }
+
+          callback(
+            new Error(
+              'CORS_ORIGIN_NOT_ALLOWED',
+            ),
+          );
+        },
 
       credentials:
-        true,
+        false,
 
       methods: [
         'GET',
@@ -79,13 +154,18 @@ export function createApp(
         'Content-Type',
         'Authorization',
         'X-Request-Id',
+        'X-Withdrawal-Webhook-Secret',
       ],
+
+      maxAge:
+        600,
     }),
   );
 
   app.use(
     express.json({
-      limit: '1mb',
+      limit:
+        '1mb',
     }),
   );
 
@@ -95,7 +175,9 @@ export function createApp(
 
   app.use(
     '/health',
-    healthRouter,
+    healthRouter(
+      redis,
+    ),
   );
 
   app.use(
@@ -114,6 +196,7 @@ export function createApp(
     '/api/v1/account',
     createAccountRouter(
       marketData,
+      redis,
     ),
   );
 
