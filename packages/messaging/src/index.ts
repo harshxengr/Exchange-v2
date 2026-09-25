@@ -98,7 +98,7 @@ export type EventStreamMessage = {
 export async function claimPendingEvents(
     client: RedisClient,
     consumer: string,
-    minIdleMs = 5_000,
+    minIdleMs = 60_000,
     startId = '0-0',
     count = 10,
 ): Promise<{
@@ -293,7 +293,7 @@ export type ClaimedStreamBatch = {
 export async function claimPendingCommands(
     client: RedisClient,
     consumer: string,
-    minIdleMs = 5_000,
+    minIdleMs = 60_000,
     startId = '0-0',
     count = 10,
 ): Promise<ClaimedStreamBatch> {
