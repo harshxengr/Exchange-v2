@@ -280,6 +280,22 @@ async function main(): Promise<void> {
       'demo'
     ).trim().toLowerCase();
 
+  if (
+    (
+      process.env.NODE_ENV ??
+      'development'
+    ) ===
+      'production' &&
+    payoutProviderName ===
+      'demo' &&
+    process.env.ALLOW_DEMO_PAYOUTS_IN_PRODUCTION !==
+      'true'
+  ) {
+    throw new Error(
+      'DEMO_PAYOUT_PROVIDER_DISABLED_IN_PRODUCTION',
+    );
+  }
+
   const payoutProvider =
     payoutProviderName ===
       'razorpayx'
