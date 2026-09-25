@@ -256,6 +256,29 @@ export class DemoPayoutProvider
         };
 
       case 'REVERSE':
+        /*
+         * Simulate the important real-world case where a
+         * payout is first processed successfully and later
+         * reversed by the provider.
+         *
+         *   delay            -> COMPLETED
+         *   2 * delay onward -> REVERSED
+         */
+        if (
+          elapsed <
+          this.delayMs * 2
+        ) {
+          return {
+            status:
+              'COMPLETED',
+
+            providerRef,
+
+            reason:
+              null,
+          };
+        }
+
         return {
           status:
             'REVERSED',
