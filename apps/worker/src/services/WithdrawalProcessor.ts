@@ -9,7 +9,6 @@ import {
 
 import {
   HttpPayoutProvider,
-  type PayoutStatus,
   PayoutProviderError,
 } from './PayoutProvider.js';
 
