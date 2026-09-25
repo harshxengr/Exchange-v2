@@ -20,6 +20,7 @@ export type {
     CreditBalanceCommand,
     ReserveWithdrawalCommand,
     CompleteWithdrawalCommand,
+    ReverseWithdrawalCommand,
     FailWithdrawalCommand,
     EngineCommand,
     EngineReply,
