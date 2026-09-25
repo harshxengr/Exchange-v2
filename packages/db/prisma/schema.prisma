@@ -96,6 +96,7 @@ model Order {
 
   @@index([userId, status])
   @@index([marketId, createdAt])
+  @@index([marketId, status, price, createdAt])
 }
 
 model Trade {
