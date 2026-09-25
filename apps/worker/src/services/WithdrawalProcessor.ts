@@ -253,11 +253,6 @@ export class WithdrawalProcessor {
                   failureReason:
                     null,
 
-                  attemptCount: {
-                    lt:
-                      this.maxAttempts,
-                  },
-
                   OR: [
                     {
                       providerRef:
@@ -365,6 +360,21 @@ export class WithdrawalProcessor {
           withdrawal.id,
         );
       }
+
+      return;
+    }
+
+    if (
+      withdrawal.status ===
+      'PROCESSING' &&
+      !withdrawal.failureReason &&
+      withdrawal.attemptCount >=
+        this.maxAttempts
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        'PAYOUT_MAX_ATTEMPTS_EXCEEDED',
+      );
 
       return;
     }
