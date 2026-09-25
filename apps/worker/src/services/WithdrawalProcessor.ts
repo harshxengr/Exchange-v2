@@ -8,8 +8,9 @@ import {
 } from '@exchange/messaging';
 
 import {
-  HttpPayoutProvider,
   PayoutProviderError,
+  type PayoutProvider,
+  type PayoutStatus,
 } from './PayoutProvider.js';
 
 type WithdrawalRecord = {
@@ -139,7 +140,7 @@ export class WithdrawalProcessor {
     private readonly redis:
       RedisClient,
     private readonly provider:
-      HttpPayoutProvider,
+      PayoutProvider,
   ) {}
 
   async run(): Promise<void> {
@@ -191,8 +192,14 @@ export class WithdrawalProcessor {
     const withdrawals =
       await prisma.withdrawal.findMany({
         where: {
-          status:
-            'PROCESSING',
+          status: {
+            in: [
+              'PROCESSING',
+              'COMPLETING',
+              'FAILING',
+              'REVERSING',
+            ],
+          },
 
           OR: [
             {
@@ -284,10 +291,46 @@ export class WithdrawalProcessor {
     withdrawal:
       WithdrawalRecord,
   ): Promise<void> {
+    if (
+      withdrawal.status ===
+      'COMPLETING'
+    ) {
+      await this.enqueueCompletion(
+        withdrawal,
+      );
+
+      return;
+    }
+
+    if (
+      withdrawal.status ===
+      'FAILING'
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        withdrawal.failureReason ??
+          'PAYOUT_PROCESSOR_ERROR',
+      );
+
+      return;
+    }
+
+    if (
+      withdrawal.status ===
+      'REVERSING'
+    ) {
+      await this.enqueueReversal(
+        withdrawal,
+      );
+
+      return;
+    }
+
     /*
-     * A non-null failureReason means the provider operation
-     * is already terminal. The remaining work is to make sure
-     * the engine sees the deterministic FAIL_WITHDRAWAL command.
+     * A non-null failureReason while PROCESSING means the
+     * provider operation has already reached a terminal
+     * failure and the engine still needs the deterministic
+     * FAIL_WITHDRAWAL command.
      */
     if (
       withdrawal.failureReason
@@ -552,22 +595,11 @@ export class WithdrawalProcessor {
       },
     );
 
-    if (
-      result.status ===
-      'COMPLETED'
-    ) {
-      await this.enqueueCompletion(
-        withdrawal,
-      );
-    } else if (
-      result.status ===
-      'FAILED'
-    ) {
-      await this.enqueueFailure(
-        withdrawal,
-        'PAYOUT_PROVIDER_FAILED',
-      );
-    }
+    await this.handleProviderTerminalStatus(
+      withdrawal,
+      result.status,
+      'PAYOUT_PROVIDER_FAILED',
+    );
   }
 
   private async reconcile(
@@ -651,23 +683,12 @@ export class WithdrawalProcessor {
       },
     );
 
-    if (
-      result.status ===
-      'COMPLETED'
-    ) {
-      await this.enqueueCompletion(
-        withdrawal,
-      );
-    } else if (
-      result.status ===
-      'FAILED'
-    ) {
-      await this.enqueueFailure(
-        withdrawal,
-        result.reason ??
-          'PAYOUT_PROVIDER_FAILED',
-      );
-    }
+    await this.handleProviderTerminalStatus(
+      withdrawal,
+      result.status,
+      result.reason ??
+        'PAYOUT_PROVIDER_FAILED',
+    );
 
     console.log(
       '[payout] provider status reconciled',
@@ -687,6 +708,50 @@ export class WithdrawalProcessor {
           startedAt.getTime(),
       },
     );
+  }
+
+  private async handleProviderTerminalStatus(
+    withdrawal:
+      Pick<
+        WithdrawalRecord,
+        'id' | 'userId' | 'asset' | 'amount'
+      >,
+    status:
+      PayoutStatus,
+    reason:
+      string,
+  ): Promise<void> {
+    if (
+      status ===
+      'COMPLETED'
+    ) {
+      await this.enqueueCompletion(
+        withdrawal,
+      );
+
+      return;
+    }
+
+    if (
+      status ===
+      'REVERSED'
+    ) {
+      await this.enqueueReversal(
+        withdrawal,
+      );
+
+      return;
+    }
+
+    if (
+      status ===
+      'FAILED'
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        reason,
+      );
+    }
   }
 
   private async recordFailure(
@@ -826,6 +891,27 @@ export class WithdrawalProcessor {
         'id' | 'userId' | 'asset' | 'amount'
       >,
   ): Promise<void> {
+    await prisma.withdrawal.updateMany({
+      where: {
+        id:
+          withdrawal.id,
+
+        status:
+          'PROCESSING',
+      },
+
+      data: {
+        status:
+          'COMPLETING',
+
+        nextAttemptAt:
+          addMilliseconds(
+            new Date(),
+            this.retryMs,
+          ),
+      },
+    });
+
     await appendCommand(
       this.redis,
       {
@@ -848,7 +934,15 @@ export class WithdrawalProcessor {
           withdrawal.id,
       },
     );
+  }
 
+  private async enqueueReversal(
+    withdrawal:
+      Pick<
+        WithdrawalRecord,
+        'id' | 'userId' | 'asset' | 'amount'
+      >,
+  ): Promise<void> {
     await prisma.withdrawal.updateMany({
       where: {
         id:
@@ -859,6 +953,9 @@ export class WithdrawalProcessor {
       },
 
       data: {
+        status:
+          'REVERSING',
+
         nextAttemptAt:
           addMilliseconds(
             new Date(),
@@ -866,6 +963,29 @@ export class WithdrawalProcessor {
           ),
       },
     });
+
+    await appendCommand(
+      this.redis,
+      {
+        type:
+          'REVERSE_WITHDRAWAL',
+
+        commandId:
+          `withdrawal:${withdrawal.id}:reverse`,
+
+        userId:
+          withdrawal.userId,
+
+        asset:
+          withdrawal.asset,
+
+        amount:
+          withdrawal.amount.toString(),
+
+        withdrawalId:
+          withdrawal.id,
+      },
+    );
   }
 
   private async enqueueFailure(
@@ -887,6 +1007,9 @@ export class WithdrawalProcessor {
       },
 
       data: {
+        status:
+          'FAILING',
+
         failureReason:
           reason,
       },
@@ -915,22 +1038,5 @@ export class WithdrawalProcessor {
       },
     );
 
-    await prisma.withdrawal.updateMany({
-      where: {
-        id:
-          withdrawal.id,
-
-        status:
-          'PROCESSING',
-      },
-
-      data: {
-        nextAttemptAt:
-          addMilliseconds(
-            new Date(),
-            this.retryMs,
-          ),
-      },
-    });
   }
 }

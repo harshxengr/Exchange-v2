@@ -19,6 +19,10 @@ import {
 } from './services/PayoutProvider.js';
 
 import {
+  RazorpayXPayoutProvider,
+} from './services/RazorpayXPayoutProvider.js';
+
+import {
   WithdrawalProcessor,
 } from './services/WithdrawalProcessor.js';
 
@@ -264,7 +268,13 @@ async function main(): Promise<void> {
     new EventHandler();
 
   const payoutProvider =
-    new HttpPayoutProvider();
+    (
+      process.env.PAYOUT_PROVIDER ??
+      'http'
+    ).toLowerCase() ===
+    'razorpayx'
+      ? new RazorpayXPayoutProvider()
+      : new HttpPayoutProvider();
 
   const withdrawalProcessor =
     new WithdrawalProcessor(

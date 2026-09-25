@@ -838,7 +838,9 @@ export class EventHandler {
 
               if (
                 withdrawal.status !==
-                'PROCESSING'
+                  'PROCESSING' &&
+                withdrawal.status !==
+                  'COMPLETING'
               ) {
                 throw new Error(
                   `WITHDRAWAL_INVALID_COMPLETION_STATE:${withdrawalId}:${withdrawal.status}`,
@@ -904,6 +906,142 @@ export class EventHandler {
 
             /*
              * -------------------------------------------------
+             * WITHDRAWAL REVERSED
+             * -------------------------------------------------
+             *
+             * The external payout was previously completed and
+             * therefore the engine already removed the funds.
+             * A provider reversal means those funds returned to
+             * the exchange, so the engine credits them back and
+             * the ledger records a positive reversal entry.
+             */
+            if (
+              event.reason ===
+              'WITHDRAWAL_REVERSED'
+            ) {
+              if (!event.referenceId) {
+                throw new Error(
+                  `WITHDRAWAL_REFERENCE_MISSING:${event.eventId}`,
+                );
+              }
+
+              const withdrawalId =
+                event.referenceId;
+
+              const withdrawal =
+                await db.withdrawal.findUnique({
+                  where: {
+                    id:
+                      withdrawalId,
+                  },
+                });
+
+              if (!withdrawal) {
+                throw new Error(
+                  `WITHDRAWAL_NOT_FOUND:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.userId !==
+                event.userId
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_USER_MISMATCH:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.asset !==
+                event.asset
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_ASSET_MISMATCH:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.amount <=
+                0n
+              ) {
+                throw new Error(
+                  `INVALID_WITHDRAWAL_AMOUNT:${withdrawalId}`,
+                );
+              }
+
+              if (
+                withdrawal.status ===
+                'REVERSED'
+              ) {
+                break;
+              }
+
+              if (
+                withdrawal.status !==
+                  'COMPLETED'
+              ) {
+                throw new Error(
+                  `WITHDRAWAL_INVALID_REVERSAL_STATE:${withdrawalId}:${withdrawal.status}`,
+                );
+              }
+
+              const existingReversalLedger =
+                await db.ledgerEntry.findFirst({
+                  where: {
+                    reason:
+                      'WITHDRAWAL_REVERSED',
+
+                    referenceId:
+                      withdrawalId,
+                  },
+                });
+
+              if (
+                !existingReversalLedger
+              ) {
+                await db.ledgerEntry.create({
+                  data: {
+                    userId:
+                      withdrawal.userId,
+
+                    asset:
+                      withdrawal.asset,
+
+                    amount:
+                      withdrawal.amount,
+
+                    reason:
+                      'WITHDRAWAL_REVERSED',
+
+                    referenceId:
+                      withdrawalId,
+
+                    createdAt:
+                      new Date(
+                        event.occurredAt,
+                      ),
+                  },
+                });
+              }
+
+              await db.withdrawal.update({
+                where: {
+                  id:
+                    withdrawalId,
+                },
+
+                data: {
+                  status:
+                    'REVERSED',
+
+                  failureReason:
+                    'PAYOUT_PROVIDER_REVERSED',
+                },
+              });
+            }
+
+            /*
+             * -------------------------------------------------
              * WITHDRAWAL RELEASED
              * -------------------------------------------------
              *
@@ -946,7 +1084,9 @@ export class EventHandler {
 
               if (
                 withdrawal.status !==
-                'PROCESSING'
+                  'PROCESSING' &&
+                withdrawal.status !==
+                  'FAILING'
               ) {
                 throw new Error(
                   `WITHDRAWAL_INVALID_RELEASE_STATE:${withdrawalId}:${withdrawal.status}`,

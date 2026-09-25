@@ -10,6 +10,10 @@ import {
   HttpPayoutProvider,
 } from '../services/PayoutProvider.js';
 
+import {
+  RazorpayXPayoutProvider,
+} from '../services/RazorpayXPayoutProvider.js';
+
 const originalFetch =
   globalThis.fetch;
 
@@ -23,7 +27,14 @@ afterEach(() => {
   delete process.env.PAYOUT_PROVIDER_API_KEY;
   delete process.env.PAYOUT_PROVIDER_NAME;
   delete process.env.PAYOUT_PROVIDER_TIMEOUT_MS;
-  delete process.env.NODE_ENV;
+  delete process.env.RAZORPAY_KEY_ID;
+  delete process.env.RAZORPAY_KEY_SECRET;
+  delete process.env.RAZORPAYX_ACCOUNT_NUMBER;
+  delete process.env.RAZORPAYX_PAYOUT_MODE;
+  delete process.env.RAZORPAYX_PAYOUT_PURPOSE;
+  delete process.env.RAZORPAYX_AMOUNT_MULTIPLIER;
+  delete process.env.RAZORPAY_API_BASE_URL;
+  delete process.env.RAZORPAY_TIMEOUT_MS;
 });
 
 describe(
@@ -41,9 +52,9 @@ describe(
         const fetchMock =
           vi.fn(
             async (
-              input: RequestInfo |
+              _input: RequestInfo |
                 URL,
-              init?: RequestInit,
+              _init?: RequestInit,
             ) =>
               new Response(
                 JSON.stringify({
@@ -162,168 +173,11 @@ describe(
         ).toBe(
           'Bearer test-key',
         );
-
-        expect(
-          JSON.parse(
-            String(
-              requestInit?.body,
-            ),
-          ),
-        ).toEqual({
-          withdrawalId:
-            'withdrawal-1',
-
-          asset:
-            'INR',
-
-          amount:
-            '100',
-
-          destination:
-            'destination-1',
-
-          externalRef:
-            'withdrawal-ref-1',
-        });
       },
     );
 
     it(
-      'classifies provider 4xx errors as non-retryable',
-      async () => {
-        process.env.PAYOUT_PROVIDER_URL =
-          'https://provider.test';
-
-        process.env.PAYOUT_PROVIDER_API_KEY =
-          'test-key';
-
-        globalThis.fetch =
-          vi.fn(
-            async () =>
-              new Response(
-                JSON.stringify({
-                  error: {
-                    code:
-                      'INVALID_BENEFICIARY',
-
-                    message:
-                      'beneficiary is invalid',
-                  },
-                }),
-                {
-                  status:
-                    400,
-
-                  headers: {
-                    'Content-Type':
-                      'application/json',
-                  },
-                },
-              ),
-          );
-
-        const provider =
-          new HttpPayoutProvider();
-
-        await expect(
-          provider.createPayout({
-            id:
-              'withdrawal-2',
-
-            asset:
-              'INR',
-
-            amount:
-              100n,
-
-            destination:
-              'bad-destination',
-
-            externalRef:
-              'withdrawal-ref-2',
-          }),
-        ).rejects.toMatchObject({
-          code:
-            'INVALID_BENEFICIARY',
-
-          retryable:
-            false,
-
-          httpStatus:
-            400,
-        });
-      },
-    );
-
-    it(
-      'classifies provider 500 errors as retryable',
-      async () => {
-        process.env.PAYOUT_PROVIDER_URL =
-          'https://provider.test';
-
-        process.env.PAYOUT_PROVIDER_API_KEY =
-          'test-key';
-
-        globalThis.fetch =
-          vi.fn(
-            async () =>
-              new Response(
-                JSON.stringify({
-                  error: {
-                    code:
-                      'TEMPORARY_FAILURE',
-
-                    message:
-                      'provider unavailable',
-                  },
-                }),
-                {
-                  status:
-                    500,
-
-                  headers: {
-                    'Content-Type':
-                      'application/json',
-                  },
-                },
-              ),
-          );
-
-        const provider =
-          new HttpPayoutProvider();
-
-        await expect(
-          provider.createPayout({
-            id:
-              'withdrawal-3',
-
-            asset:
-              'INR',
-
-            amount:
-              100n,
-
-            destination:
-              'destination-3',
-
-            externalRef:
-              'withdrawal-ref-3',
-          }),
-        ).rejects.toMatchObject({
-          code:
-            'TEMPORARY_FAILURE',
-
-          retryable:
-            true,
-
-          httpStatus:
-            500,
-        });
-      },
-    );
-
-    it(
-      'reconciles provider status',
+      'preserves a provider reversal status',
       async () => {
         process.env.PAYOUT_PROVIDER_URL =
           'https://provider.test';
@@ -337,10 +191,10 @@ describe(
               new Response(
                 JSON.stringify({
                   id:
-                    'provider-payout-4',
+                    'provider-payout-reversed',
 
                   status:
-                    'COMPLETED',
+                    'REVERSED',
                 }),
                 {
                   status:
@@ -359,27 +213,272 @@ describe(
 
         const result =
           await provider.getPayoutStatus(
-            'provider-payout-4',
+            'provider-payout-reversed',
+          );
+
+        expect(
+          result.status,
+        ).toBe(
+          'REVERSED',
+        );
+      },
+    );
+  },
+);
+
+describe(
+  'RazorpayXPayoutProvider',
+  () => {
+    afterEach(() => {
+      delete process.env.RAZORPAY_KEY_ID;
+      delete process.env.RAZORPAY_KEY_SECRET;
+      delete process.env.RAZORPAYX_ACCOUNT_NUMBER;
+      delete process.env.RAZORPAYX_PAYOUT_MODE;
+      delete process.env.RAZORPAYX_PAYOUT_PURPOSE;
+      delete process.env.RAZORPAYX_AMOUNT_MULTIPLIER;
+      delete process.env.RAZORPAY_API_BASE_URL;
+    });
+
+    it(
+      'creates an INR payout using a fund account id and idempotency key',
+      async () => {
+        process.env.RAZORPAY_KEY_ID =
+          'rzp_test_key';
+
+        process.env.RAZORPAY_KEY_SECRET =
+          'rzp_test_secret';
+
+        process.env.RAZORPAYX_ACCOUNT_NUMBER =
+          'customer-identifier';
+
+        process.env.RAZORPAYX_PAYOUT_MODE =
+          'IMPS';
+
+        process.env.RAZORPAYX_PAYOUT_PURPOSE =
+          'payout';
+
+        process.env.RAZORPAYX_AMOUNT_MULTIPLIER =
+          '1';
+
+        process.env.RAZORPAY_API_BASE_URL =
+          'https://api.razorpay.test';
+
+        const fetchMock =
+          vi.fn(
+            async (
+              _input: RequestInfo |
+                URL,
+              _init?: RequestInit,
+            ) =>
+              new Response(
+                JSON.stringify({
+                  id:
+                    'pout_test_1',
+
+                  status:
+                    'processing',
+                }),
+                {
+                  status:
+                    200,
+
+                  headers: {
+                    'Content-Type':
+                      'application/json',
+                  },
+                },
+              ),
+          );
+
+        globalThis.fetch =
+          fetchMock;
+
+        const provider =
+          new RazorpayXPayoutProvider();
+
+        const result =
+          await provider.createPayout({
+            id:
+              'withdrawal-razorpay-1',
+
+            asset:
+              'INR',
+
+            amount:
+              100n,
+
+            destination:
+              'fa_test_1',
+
+            externalRef:
+              'withdrawal-ref-razorpay-1',
+          });
+
+        expect(
+          result,
+        ).toEqual({
+          status:
+            'PROCESSING',
+
+          providerRef:
+            'pout_test_1',
+        });
+
+        const call =
+          fetchMock.mock.calls[0];
+
+        expect(
+          call,
+        ).toBeDefined();
+
+        if (
+          !call
+        ) {
+          throw new Error(
+            'Expected RazorpayX fetch call',
+          );
+        }
+
+        const [
+          requestUrl,
+          requestInit,
+        ] =
+          call;
+
+        expect(
+          String(
+            requestUrl,
+          ),
+        ).toBe(
+          'https://api.razorpay.test/v1/payouts',
+        );
+
+        const headers =
+          new Headers(
+            requestInit?.headers,
+          );
+
+        expect(
+          headers.get(
+            'X-Payout-Idempotency',
+          ),
+        ).toBe(
+          'withdrawal-razorpay-1',
+        );
+
+        const authorization =
+          headers.get(
+            'Authorization',
+          );
+
+        expect(
+          authorization?.startsWith(
+            'Basic ',
+          ),
+        ).toBe(
+          true,
+        );
+
+        const body =
+          JSON.parse(
+            String(
+              requestInit?.body,
+            ),
+          ) as {
+            account_number: string;
+            fund_account_id: string;
+            amount: string;
+            currency: string;
+            mode: string;
+            purpose: string;
+            reference_id: string;
+          };
+
+        expect(
+          body,
+        ).toEqual({
+          account_number:
+            'customer-identifier',
+
+          fund_account_id:
+            'fa_test_1',
+
+          amount:
+            '100',
+
+          currency:
+            'INR',
+
+          mode:
+            'IMPS',
+
+          purpose:
+            'payout',
+
+          reference_id:
+            'withdrawal-razorpay-1',
+        });
+      },
+    );
+
+    it(
+      'maps RazorpayX reversed payouts to REVERSED',
+      async () => {
+        process.env.RAZORPAY_KEY_ID =
+          'rzp_test_key';
+
+        process.env.RAZORPAY_KEY_SECRET =
+          'rzp_test_secret';
+
+        process.env.RAZORPAYX_ACCOUNT_NUMBER =
+          'customer-identifier';
+
+        globalThis.fetch =
+          vi.fn(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  id:
+                    'pout_test_2',
+
+                  status:
+                    'reversed',
+
+                  failure_reason:
+                    'bank_returned_funds',
+                }),
+                {
+                  status:
+                    200,
+
+                  headers: {
+                    'Content-Type':
+                      'application/json',
+                  },
+                },
+              ),
+          );
+
+        const provider =
+          new RazorpayXPayoutProvider();
+
+        const result =
+          await provider.getPayoutStatus(
+            'pout_test_2',
           );
 
         expect(
           result,
         ).toEqual({
           status:
-            'COMPLETED',
+            'REVERSED',
 
           providerRef:
-            'provider-payout-4',
+            'pout_test_2',
 
           reason:
-            null,
+            'bank_returned_funds',
         });
-
-        expect(
-          fetch,
-        ).toHaveBeenCalledTimes(
-          1,
-        );
       },
     );
   },

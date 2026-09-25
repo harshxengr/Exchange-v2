@@ -1,7 +1,8 @@
 export type PayoutStatus =
   | 'PROCESSING'
   | 'COMPLETED'
-  | 'FAILED';
+  | 'FAILED'
+  | 'REVERSED';
 
 export type PayoutRequest = {
   withdrawalId: string;
@@ -29,6 +30,25 @@ export type PayoutStatusResult = {
   providerRef: string | null;
   reason: string | null;
 };
+
+export interface PayoutProvider {
+  readonly providerName: string;
+  readonly enabled: boolean;
+
+  createPayout(
+    withdrawal: {
+      id: string;
+      asset: string;
+      amount: bigint;
+      destination: string;
+      externalRef: string;
+    },
+  ): Promise<PayoutCreateResult>;
+
+  getPayoutStatus(
+    providerRef: string,
+  ): Promise<PayoutStatusResult>;
+}
 
 export class PayoutProviderError
   extends Error {
@@ -102,11 +122,17 @@ function normalizeStatus(
   }
 
   if (
+    status ===
+    'REVERSED'
+  ) {
+    return 'REVERSED';
+  }
+
+  if (
     [
       'FAILED',
       'FAILURE',
       'REJECTED',
-      'REVERSED',
     ].includes(status)
   ) {
     return 'FAILED';
@@ -207,7 +233,7 @@ async function readResponseBody(
   }
 }
 
-export class HttpPayoutProvider {
+export class HttpPayoutProvider implements PayoutProvider {
   private readonly baseUrl:
     string;
 

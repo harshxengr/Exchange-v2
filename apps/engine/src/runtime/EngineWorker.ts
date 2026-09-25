@@ -465,6 +465,11 @@ export class EngineWorker {
           command,
         );
 
+      case 'REVERSE_WITHDRAWAL':
+        return this.reverseWithdrawal(
+          command,
+        );
+
       case 'FAIL_WITHDRAWAL':
         return this.failWithdrawal(
           command,
@@ -659,6 +664,44 @@ export class EngineWorker {
     ];
   }
 
+  private reverseWithdrawal(
+    command: Extract<
+      EngineCommand,
+      {
+        type: 'REVERSE_WITHDRAWAL';
+      }
+    >,
+  ): ExchangeEvent[] {
+    const amount =
+      BigInt(
+        command.amount,
+      );
+
+    if (
+      amount <= 0n
+    ) {
+      throw new Error(
+        'INVALID_WITHDRAWAL_AMOUNT',
+      );
+    }
+
+    this.engine.reverseWithdrawal(
+      command.userId,
+      command.asset,
+      amount,
+    );
+
+    return [
+      this.createWithdrawalBalanceEvent(
+        command.commandId,
+        command.userId,
+        command.asset,
+        'WITHDRAWAL_REVERSED',
+        command.withdrawalId,
+      ),
+    ];
+  }
+
   private failWithdrawal(
     command: Extract<
       EngineCommand,
@@ -757,6 +800,7 @@ export class EngineWorker {
     reason:
       | 'WITHDRAWAL_RESERVED'
       | 'WITHDRAWAL_COMPLETED'
+      | 'WITHDRAWAL_REVERSED'
       | 'WITHDRAWAL_RELEASED',
     withdrawalId: string,
   ): ExchangeEvent {
