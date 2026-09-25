@@ -178,6 +178,12 @@ export class WithdrawalProcessor {
   }
 
   private async processDueWithdrawals(): Promise<void> {
+    if (
+      !this.provider.enabled
+    ) {
+      return;
+    }
+
     const now =
       new Date();
 
