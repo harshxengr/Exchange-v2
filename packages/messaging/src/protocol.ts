@@ -127,6 +127,20 @@ export type CompleteWithdrawalCommand = {
  * Releases reserved funds when the external
  * payout provider reports failure.
  */
+export type ReverseWithdrawalCommand = {
+    type: 'REVERSE_WITHDRAWAL';
+
+    commandId: string;
+
+    userId: string;
+
+    asset: string;
+
+    amount: string;
+
+    withdrawalId: string;
+};
+
 export type FailWithdrawalCommand = {
     type: 'FAIL_WITHDRAWAL';
 
@@ -148,6 +162,7 @@ export type EngineCommand =
     | CreditBalanceCommand
     | ReserveWithdrawalCommand
     | CompleteWithdrawalCommand
+    | ReverseWithdrawalCommand
     | FailWithdrawalCommand;
 
 export type EngineReply =
