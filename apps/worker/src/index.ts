@@ -23,6 +23,10 @@ import {
 } from './services/RazorpayXPayoutProvider.js';
 
 import {
+  DemoPayoutProvider,
+} from './services/DemoPayoutProvider.js';
+
+import {
   WithdrawalProcessor,
 } from './services/WithdrawalProcessor.js';
 
@@ -267,14 +271,20 @@ async function main(): Promise<void> {
   const handler =
     new EventHandler();
 
-  const payoutProvider =
+  const payoutProviderName =
     (
       process.env.PAYOUT_PROVIDER ??
-      'http'
-    ).toLowerCase() ===
-    'razorpayx'
+      'demo'
+    ).trim().toLowerCase();
+
+  const payoutProvider =
+    payoutProviderName ===
+      'razorpayx'
       ? new RazorpayXPayoutProvider()
-      : new HttpPayoutProvider();
+      : payoutProviderName ===
+        'http'
+        ? new HttpPayoutProvider()
+        : new DemoPayoutProvider();
 
   const withdrawalProcessor =
     new WithdrawalProcessor(

@@ -14,6 +14,10 @@ import {
   RazorpayXPayoutProvider,
 } from '../services/RazorpayXPayoutProvider.js';
 
+import {
+  DemoPayoutProvider,
+} from '../services/DemoPayoutProvider.js';
+
 const originalFetch =
   globalThis.fetch;
 
@@ -479,6 +483,225 @@ describe(
           reason:
             'bank_returned_funds',
         });
+      },
+    );
+  },
+);
+
+
+describe(
+  'DemoPayoutProvider',
+  () => {
+    afterEach(() => {
+      delete process.env.DEMO_PAYOUT_MODE;
+      delete process.env.DEMO_PAYOUT_DELAY_MS;
+    });
+
+    it(
+      'completes a payout locally without a network call',
+      async () => {
+        process.env.DEMO_PAYOUT_MODE =
+          'COMPLETE';
+
+        process.env.DEMO_PAYOUT_DELAY_MS =
+          '0';
+
+        const provider =
+          new DemoPayoutProvider();
+
+        const createResult =
+          await provider.createPayout({
+            id:
+              'withdrawal-demo-1',
+
+            asset:
+              'INR',
+
+            amount:
+              100n,
+
+            destination:
+              'demo-destination',
+
+            externalRef:
+              'demo-ref-1',
+          });
+
+        expect(
+          createResult.status,
+        ).toBe(
+          'PROCESSING',
+        );
+
+        expect(
+          createResult.providerRef
+            ?.startsWith(
+              'demo:withdrawal-demo-1:',
+            ),
+        ).toBe(
+          true,
+        );
+
+        const statusResult =
+          await provider.getPayoutStatus(
+            createResult.providerRef!,
+          );
+
+        expect(
+          statusResult,
+        ).toEqual({
+          status:
+            'COMPLETED',
+
+          providerRef:
+            createResult.providerRef,
+
+          reason:
+            null,
+        });
+      },
+    );
+
+    it(
+      'simulates a provider failure',
+      async () => {
+        process.env.DEMO_PAYOUT_MODE =
+          'FAIL';
+
+        process.env.DEMO_PAYOUT_DELAY_MS =
+          '0';
+
+        const provider =
+          new DemoPayoutProvider();
+
+        const createResult =
+          await provider.createPayout({
+            id:
+              'withdrawal-demo-2',
+
+            asset:
+              'INR',
+
+            amount:
+              100n,
+
+            destination:
+              'demo-destination',
+
+            externalRef:
+              'demo-ref-2',
+          });
+
+        const statusResult =
+          await provider.getPayoutStatus(
+            createResult.providerRef!,
+          );
+
+        expect(
+          statusResult,
+        ).toEqual({
+          status:
+            'FAILED',
+
+          providerRef:
+            createResult.providerRef,
+
+          reason:
+            'DEMO_PROVIDER_SIMULATED_FAILURE',
+        });
+      },
+    );
+
+    it(
+      'simulates a payout reversal',
+      async () => {
+        process.env.DEMO_PAYOUT_MODE =
+          'REVERSE';
+
+        process.env.DEMO_PAYOUT_DELAY_MS =
+          '0';
+
+        const provider =
+          new DemoPayoutProvider();
+
+        const createResult =
+          await provider.createPayout({
+            id:
+              'withdrawal-demo-3',
+
+            asset:
+              'INR',
+
+            amount:
+              100n,
+
+            destination:
+              'demo-destination',
+
+            externalRef:
+              'demo-ref-3',
+          });
+
+        const statusResult =
+          await provider.getPayoutStatus(
+            createResult.providerRef!,
+          );
+
+        expect(
+          statusResult,
+        ).toEqual({
+          status:
+            'REVERSED',
+
+          providerRef:
+            createResult.providerRef,
+
+          reason:
+            'DEMO_PROVIDER_SIMULATED_REVERSAL',
+        });
+      },
+    );
+
+    it(
+      'returns PROCESSING before the configured delay',
+      async () => {
+        process.env.DEMO_PAYOUT_MODE =
+          'COMPLETE';
+
+        process.env.DEMO_PAYOUT_DELAY_MS =
+          '10000';
+
+        const provider =
+          new DemoPayoutProvider();
+
+        const createResult =
+          await provider.createPayout({
+            id:
+              'withdrawal-demo-4',
+
+            asset:
+              'INR',
+
+            amount:
+              100n,
+
+            destination:
+              'demo-destination',
+
+            externalRef:
+              'demo-ref-4',
+          });
+
+        const statusResult =
+          await provider.getPayoutStatus(
+            createResult.providerRef!,
+          );
+
+        expect(
+          statusResult.status,
+        ).toBe(
+          'PROCESSING',
+        );
       },
     );
   },
