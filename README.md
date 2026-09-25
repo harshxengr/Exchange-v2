@@ -152,3 +152,8 @@ worker tests
 ### Important scope
 
 The exchange is production-style software for a resume/demo deployment. The default payout path is a deterministic local simulator and does not move real money. A real regulated financial service would additionally require external provider contracts, KYC/AML, custody controls, key management, compliance, operational monitoring, disaster recovery, independent security review, and other production controls that are intentionally outside this resume project.
+
+## Free deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the free resume/demo deployment using Vercel Hobby, Render Free, Neon Free PostgreSQL, and Upstash Redis.
+
