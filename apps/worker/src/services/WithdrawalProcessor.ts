@@ -513,17 +513,19 @@ export class WithdrawalProcessor {
             providerRef:
               result.providerRef,
 
-            failureReason:
-              result.status ===
-              'FAILED'
-                ? 'PAYOUT_PROVIDER_FAILED'
-                : undefined,
-
             nextAttemptAt:
               addMilliseconds(
                 now,
                 this.retryMs,
               ),
+
+            ...(result.status ===
+            'FAILED'
+              ? {
+                  failureReason:
+                    'PAYOUT_PROVIDER_FAILED',
+                }
+              : {}),
           },
         });
       },
@@ -624,13 +626,6 @@ export class WithdrawalProcessor {
               result.providerRef ??
               providerRef,
 
-            failureReason:
-              result.status ===
-              'FAILED'
-                ? result.reason ??
-                  'PAYOUT_PROVIDER_FAILED'
-                : undefined,
-
             nextAttemptAt:
               result.status ===
               'PROCESSING'
@@ -642,6 +637,15 @@ export class WithdrawalProcessor {
                     now,
                     this.retryMs,
                   ),
+
+            ...(result.status ===
+            'FAILED'
+              ? {
+                  failureReason:
+                    result.reason ??
+                    'PAYOUT_PROVIDER_FAILED',
+                }
+              : {}),
           },
         });
       },
