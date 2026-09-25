@@ -40,6 +40,29 @@ services:
       timeout: 5s
       retries: 20
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://exchange:exchange@postgres:5432/exchange
+      REDIS_URL: redis://redis:6379
+    command:
+      [
+        "pnpm",
+        "--filter",
+        "@exchange/db",
+        "db:deploy"
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: .
@@ -53,8 +76,8 @@ services:
       REDIS_URL: redis://redis:6379
       API_PORT: 4000
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     ports:
@@ -99,8 +122,8 @@ services:
       PAYOUT_PROVIDER: demo
       ALLOW_DEMO_PAYOUTS_IN_PRODUCTION: "true"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
