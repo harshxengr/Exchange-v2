@@ -88,6 +88,51 @@ export const STREAMS = {
     EVENTS: 'exchange:events',
 } as const;
 
+export type EventStreamMessage = {
+    id: string;
+    message: {
+        payload?: string;
+    };
+};
+
+export async function claimPendingEvents(
+    client: RedisClient,
+    consumer: string,
+    minIdleMs = 5_000,
+    startId = '0-0',
+    count = 10,
+): Promise<{
+    nextId: string;
+    messages: EventStreamMessage[];
+}> {
+    const result =
+        await client.xAutoClaim(
+            STREAMS.EVENTS,
+            CONSUMER_GROUPS.PERSISTENCE,
+            consumer,
+            minIdleMs,
+            startId,
+            {
+                COUNT:
+                    count,
+            },
+        );
+
+    const value =
+        result as unknown as {
+            nextId: string;
+            messages: EventStreamMessage[];
+        };
+
+    return {
+        nextId:
+            value.nextId,
+
+        messages:
+            value.messages ?? [],
+    };
+}
+
 export const CONSUMER_GROUPS = {
     ENGINE: 'exchange-engine',
     PERSISTENCE: 'exchange-persistence',
