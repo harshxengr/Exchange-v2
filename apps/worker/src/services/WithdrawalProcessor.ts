@@ -8,8 +8,9 @@ import {
 } from '@exchange/messaging';
 
 import {
-  HttpPayoutProvider,
   PayoutProviderError,
+  type PayoutProvider,
+  type PayoutStatus,
 } from './PayoutProvider.js';
 
 type WithdrawalRecord = {
@@ -139,7 +140,7 @@ export class WithdrawalProcessor {
     private readonly redis:
       RedisClient,
     private readonly provider:
-      HttpPayoutProvider,
+      PayoutProvider,
   ) {}
 
   async run(): Promise<void> {
@@ -552,22 +553,11 @@ export class WithdrawalProcessor {
       },
     );
 
-    if (
-      result.status ===
-      'COMPLETED'
-    ) {
-      await this.enqueueCompletion(
-        withdrawal,
-      );
-    } else if (
-      result.status ===
-      'FAILED'
-    ) {
-      await this.enqueueFailure(
-        withdrawal,
-        'PAYOUT_PROVIDER_FAILED',
-      );
-    }
+    await this.handleProviderTerminalStatus(
+      withdrawal,
+      result.status,
+      'PAYOUT_PROVIDER_FAILED',
+    );
   }
 
   private async reconcile(
@@ -651,23 +641,12 @@ export class WithdrawalProcessor {
       },
     );
 
-    if (
-      result.status ===
-      'COMPLETED'
-    ) {
-      await this.enqueueCompletion(
-        withdrawal,
-      );
-    } else if (
-      result.status ===
-      'FAILED'
-    ) {
-      await this.enqueueFailure(
-        withdrawal,
-        result.reason ??
-          'PAYOUT_PROVIDER_FAILED',
-      );
-    }
+    await this.handleProviderTerminalStatus(
+      withdrawal,
+      result.status,
+      result.reason ??
+        'PAYOUT_PROVIDER_FAILED',
+    );
 
     console.log(
       '[payout] provider status reconciled',
@@ -687,6 +666,50 @@ export class WithdrawalProcessor {
           startedAt.getTime(),
       },
     );
+  }
+
+  private async handleProviderTerminalStatus(
+    withdrawal:
+      Pick<
+        WithdrawalRecord,
+        'id' | 'userId' | 'asset' | 'amount'
+      >,
+    status:
+      PayoutStatus,
+    reason:
+      string,
+  ): Promise<void> {
+    if (
+      status ===
+      'COMPLETED'
+    ) {
+      await this.enqueueCompletion(
+        withdrawal,
+      );
+
+      return;
+    }
+
+    if (
+      status ===
+      'REVERSED'
+    ) {
+      await this.enqueueReversal(
+        withdrawal,
+      );
+
+      return;
+    }
+
+    if (
+      status ===
+      'FAILED'
+    ) {
+      await this.enqueueFailure(
+        withdrawal,
+        reason,
+      );
+    }
   }
 
   private async recordFailure(
@@ -834,6 +857,55 @@ export class WithdrawalProcessor {
 
         commandId:
           `withdrawal:${withdrawal.id}:complete`,
+
+        userId:
+          withdrawal.userId,
+
+        asset:
+          withdrawal.asset,
+
+        amount:
+          withdrawal.amount.toString(),
+
+        withdrawalId:
+          withdrawal.id,
+      },
+    );
+
+    await prisma.withdrawal.updateMany({
+      where: {
+        id:
+          withdrawal.id,
+
+        status:
+          'PROCESSING',
+      },
+
+      data: {
+        nextAttemptAt:
+          addMilliseconds(
+            new Date(),
+            this.retryMs,
+          ),
+      },
+    });
+  }
+
+  private async enqueueReversal(
+    withdrawal:
+      Pick<
+        WithdrawalRecord,
+        'id' | 'userId' | 'asset' | 'amount'
+      >,
+  ): Promise<void> {
+    await appendCommand(
+      this.redis,
+      {
+        type:
+          'REVERSE_WITHDRAWAL',
+
+        commandId:
+          `withdrawal:${withdrawal.id}:reverse`,
 
         userId:
           withdrawal.userId,
