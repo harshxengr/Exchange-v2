@@ -838,7 +838,9 @@ export class EventHandler {
 
               if (
                 withdrawal.status !==
-                'PROCESSING'
+                  'PROCESSING' &&
+                withdrawal.status !==
+                  'COMPLETING'
               ) {
                 throw new Error(
                   `WITHDRAWAL_INVALID_COMPLETION_STATE:${withdrawalId}:${withdrawal.status}`,
@@ -976,7 +978,7 @@ export class EventHandler {
 
               if (
                 withdrawal.status !==
-                'COMPLETED'
+                  'COMPLETED'
               ) {
                 throw new Error(
                   `WITHDRAWAL_INVALID_REVERSAL_STATE:${withdrawalId}:${withdrawal.status}`,
@@ -1082,7 +1084,9 @@ export class EventHandler {
 
               if (
                 withdrawal.status !==
-                'PROCESSING'
+                  'PROCESSING' &&
+                withdrawal.status !==
+                  'FAILING'
               ) {
                 throw new Error(
                   `WITHDRAWAL_INVALID_RELEASE_STATE:${withdrawalId}:${withdrawal.status}`,
