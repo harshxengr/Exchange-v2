@@ -226,6 +226,8 @@ export class EngineWorker {
     messageId: string,
     payload: Record<string, string>,
   ): Promise<boolean> {
+    let command:
+      EngineCommand | null = null;
     /*
      * ---------------------------------------------------------
      * 1. Check whether this Redis message is already covered
@@ -270,9 +272,6 @@ export class EngineWorker {
           `COMMAND_PAYLOAD_MISSING:${messageId}`,
         );
       }
-
-      let command:
-        EngineCommand;
 
       try {
         command =
@@ -353,25 +352,7 @@ export class EngineWorker {
 
       /*
        * -------------------------------------------------------
-       * 6. Publish the API reply for synchronous commands.
-       * -------------------------------------------------------
-       */
-      const reply =
-        this.createCommandReply(
-          command,
-          events,
-        );
-
-      if (reply) {
-        await appendEngineReply(
-          this.redis,
-          reply,
-        );
-      }
-
-      /*
-       * -------------------------------------------------------
-       * 7. Mark the logical command as processed.
+       * 6. Mark the logical command as processed.
        * -------------------------------------------------------
        */
       this.engine.markCommandProcessed(
@@ -386,6 +367,24 @@ export class EngineWorker {
       await this.saveCheckpoint(
         messageId,
       );
+
+      /*
+       * -------------------------------------------------------
+       * 8. Publish the API reply after the checkpoint exists.
+       * -------------------------------------------------------
+       */
+      const reply =
+        this.createCommandReply(
+          command,
+          events,
+        );
+
+      if (reply) {
+        await appendEngineReply(
+          this.redis,
+          reply,
+        );
+      }
 
       /*
        * -------------------------------------------------------
@@ -420,6 +419,7 @@ export class EngineWorker {
        * the HTTP request to time out.
        */
       if (
+        command !== null &&
         this.isExpectedClientCommandError(
           command,
           error,
@@ -615,7 +615,8 @@ export class EngineWorker {
         : String(error);
 
     const baseReason =
-      reason.split(':', 1)[0];
+      reason.split(':', 1)[0] ??
+      reason;
 
     return new Set([
       'INSUFFICIENT_FUNDS',
