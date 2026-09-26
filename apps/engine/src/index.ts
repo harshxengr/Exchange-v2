@@ -53,10 +53,14 @@ async function main(): Promise<void> {
         });
 
     if (configuredMarkets.length === 0) {
+        await prisma.$disconnect();
+
         throw new Error(
             'NO_ACTIVE_MARKETS_CONFIGURED',
         );
     }
+
+    await prisma.$disconnect();
 
     const balances =
         new BalanceStore();
