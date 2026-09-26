@@ -25,8 +25,8 @@ import {
 } from './runtime/EngineWorker.js';
 
 import {
-    DEFAULT_MARKETS,
-} from './market/defaultMarkets.js';
+    prisma,
+} from '@exchange/db';
 
 async function main(): Promise<void> {
     const redis =
@@ -42,6 +42,21 @@ async function main(): Promise<void> {
 
     const markets =
         new MarketRegistry();
+    const configuredMarkets =
+        await prisma.market.findMany({
+            where: {
+                active: true,
+            },
+            orderBy: {
+                id: 'asc',
+            },
+        });
+
+    if (configuredMarkets.length === 0) {
+        throw new Error(
+            'NO_ACTIVE_MARKETS_CONFIGURED',
+        );
+    }
 
     const balances =
         new BalanceStore();
@@ -52,8 +67,16 @@ async function main(): Promise<void> {
             balances,
         );
 
-    for (const market of DEFAULT_MARKETS) {
-        engine.registerMarket(market);
+    for (const market of configuredMarkets) {
+        engine.registerMarket({
+            id: market.id,
+            baseAsset: market.baseAsset,
+            quoteAsset: market.quoteAsset,
+            priceScale: market.priceScale,
+            quantityScale: market.quantityScale,
+            minQuantity: market.minQuantity,
+            tickSize: market.tickSize,
+        });
     }
 
     /*
