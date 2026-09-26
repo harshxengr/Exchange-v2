@@ -31,8 +31,13 @@ import {
 function createMockEngineClient(
   capturedPlaceOrder?:
     {
-      price?: string;
-      quantity?: string;
+      price:
+        string |
+        undefined;
+
+      quantity:
+        string |
+        undefined;
     },
 ):
   EngineClientPort {
