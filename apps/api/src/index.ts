@@ -19,8 +19,14 @@ import {
 } from './services/marketDataService.js';
 
 import {
+  loadMarkets,
+} from './services/marketService.js';
+
+import {
   RealtimeServer,
 } from './realtime/WebSocketServer.js';
+
+await loadMarkets();
 
 const redis =
   await createRedis();
