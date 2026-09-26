@@ -70,13 +70,33 @@ export class BalanceStore {
     }
 
     get(userId: string, asset: string): Balance {
-        const balance = this.users
-            .get(userId)
-            ?.get(asset);
+        const userBalances =
+            this.users.get(userId);
 
-        if (!balance) {
+        if (!userBalances) {
             throw new Error(
-                `Balance not found for ${userId}:${asset}`,
+                `USER_NOT_INITIALIZED:${userId}`,
+            );
+        }
+
+        let balance =
+            userBalances.get(asset);
+
+        /*
+         * An initialized user may legitimately have
+         * no balance row for a particular asset yet.
+         * Treat that as a zero balance instead of
+         * crashing order/recovery processing.
+         */
+        if (!balance) {
+            balance = {
+                available: 0n,
+                locked: 0n,
+            };
+
+            userBalances.set(
+                asset,
+                balance,
             );
         }
 
