@@ -7,6 +7,11 @@ export type MarketDefinition = {
     baseAsset: string;
     quoteAsset: string;
     status: MarketStatus;
+
+    priceScale: number;
+    quantityScale: number;
+    minQuantity: string;
+    tickSize: string;
 };
 
 const markets: MarketDefinition[] = [
@@ -18,6 +23,14 @@ const markets: MarketDefinition[] = [
         quoteAsset: 'INR',
 
         status: 'ACTIVE',
+
+        priceScale: 2,
+
+        quantityScale: 3,
+
+        minQuantity: '1',
+
+        tickSize: '1',
     },
 ];
 

@@ -25,9 +25,96 @@ import {
 } from '../middleware/validate.js';
 
 import {
+  rateLimit,
+} from '../middleware/rateLimit.js';
+
+import {
   placeOrderSchema,
   cancelOrderSchema,
 } from '../schemas/order.js';
+
+import {
+  getMarket,
+} from '../services/marketService.js';
+
+function toMinorUnits(
+  value:
+    string,
+  scale:
+    number,
+): bigint {
+  const trimmed =
+    value.trim();
+
+  const parts =
+    trimmed.split('.');
+
+  const whole =
+    parts[0] ??
+    '';
+
+  const fraction =
+    parts[1] ??
+    '';
+
+  if (
+    fraction.length >
+    scale
+  ) {
+    throw new Error(
+      'TOO_MANY_DECIMAL_PLACES',
+    );
+  }
+
+  const paddedFraction =
+    fraction.padEnd(
+      scale,
+      '0',
+    );
+
+  return BigInt(
+    whole +
+    paddedFraction,
+  );
+}
+
+function hasValidTick(
+  value:
+    bigint,
+  tickSize:
+    bigint,
+): boolean {
+  if (
+    tickSize <=
+    0n
+  ) {
+    return false;
+  }
+
+  return (
+    value %
+    tickSize
+  ) ===
+    0n;
+}
+
+const orderRateLimit =
+  rateLimit({
+    windowMs:
+      60_000,
+
+    max:
+      60,
+
+    keyPrefix:
+      'orders',
+
+    keyGenerator:
+      req =>
+        req.user?.id ??
+        req.ip ??
+        'unknown',
+  });
 
 export function createOrdersRouter(
   engineClient:
@@ -155,6 +242,7 @@ export function createOrdersRouter(
   router.post(
     '/',
     requireAuth,
+    orderRateLimit,
     validateBody(
       placeOrderSchema,
     ),
@@ -163,6 +251,150 @@ export function createOrdersRouter(
         req,
         res,
       ) => {
+        const market =
+          getMarket(
+            req.body.marketId,
+          );
+
+        if (
+          !market
+        ) {
+          res.status(404).json({
+            error: {
+              code:
+                'MARKET_NOT_FOUND',
+
+              message:
+                `Market '${req.body.marketId}' was not found`,
+            },
+          });
+
+          return;
+        }
+
+        if (
+          market.status !==
+          'ACTIVE'
+        ) {
+          res.status(409).json({
+            error: {
+              code:
+                'MARKET_NOT_ACTIVE',
+
+              message:
+                `Market '${market.id}' is not active`,
+            },
+          });
+
+          return;
+        }
+
+        let priceUnits:
+          bigint;
+
+        let quantityUnits:
+          bigint;
+
+        try {
+          priceUnits =
+            toMinorUnits(
+              req.body.price,
+              market.priceScale,
+            );
+
+          quantityUnits =
+            toMinorUnits(
+              req.body.quantity,
+              market.quantityScale,
+            );
+        } catch (error) {
+          const isPrecisionError =
+            error instanceof Error &&
+            error.message ===
+              'TOO_MANY_DECIMAL_PLACES';
+
+          res.status(400).json({
+            error: {
+              code:
+                isPrecisionError
+                  ? 'INVALID_PRECISION'
+                  : 'INVALID_ORDER_NUMBER',
+
+              message:
+                isPrecisionError
+                  ? 'Price or quantity has too many decimal places'
+                  : 'Price and quantity must be valid positive decimal values',
+            },
+          });
+
+          return;
+        }
+
+        const minQuantity =
+          BigInt(
+            market.minQuantity,
+          );
+
+        const tickSize =
+          BigInt(
+            market.tickSize,
+          );
+
+        if (
+          quantityUnits <
+          minQuantity
+        ) {
+          res.status(400).json({
+            error: {
+              code:
+                'QUANTITY_BELOW_MINIMUM',
+
+              message:
+                'Order quantity is below the market minimum',
+            },
+          });
+
+          return;
+        }
+
+        if (
+          !hasValidTick(
+            priceUnits,
+            tickSize,
+          )
+        ) {
+          res.status(400).json({
+            error: {
+              code:
+                'INVALID_PRICE_TICK',
+
+              message:
+                'Order price does not match the market tick size',
+            },
+          });
+
+          return;
+        }
+
+        if (
+          priceUnits <=
+          0n ||
+          quantityUnits <=
+          0n
+        ) {
+          res.status(400).json({
+            error: {
+              code:
+                'INVALID_ORDER_AMOUNT',
+
+              message:
+                'Price and quantity must be greater than zero',
+            },
+          });
+
+          return;
+        }
+
         const orderId =
           crypto.randomUUID();
 
@@ -176,7 +408,7 @@ export function createOrdersRouter(
               req.user.id,
 
             marketId:
-              req.body.marketId,
+              market.id,
 
             orderId,
 
@@ -184,10 +416,10 @@ export function createOrdersRouter(
               req.body.side,
 
             price:
-              req.body.price,
+              priceUnits.toString(),
 
             quantity:
-              req.body.quantity,
+              quantityUnits.toString(),
 
             postOnly:
               req.body.postOnly,
@@ -256,6 +488,7 @@ export function createOrdersRouter(
   router.delete(
     '/:orderId',
     requireAuth,
+    orderRateLimit,
     validateBody(
       cancelOrderSchema,
     ),

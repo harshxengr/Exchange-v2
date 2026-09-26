@@ -16,6 +16,10 @@ export const errorHandler:
         console.error(
             '[api]',
             {
+                requestId:
+                    res.locals
+                        .requestId,
+
                 method:
                     req.method,
 
@@ -26,6 +30,10 @@ export const errorHandler:
             },
         );
 
+        const requestId =
+            res.locals
+                .requestId;
+
         if (
             error instanceof ApiError
         ) {
@@ -33,8 +41,17 @@ export const errorHandler:
                 error.statusCode,
             ).json({
                 error: {
+                    code:
+                        error.name,
+
                     message:
                         error.message,
+
+                    ...(requestId
+                        ? {
+                            requestId,
+                        }
+                        : {}),
                 },
             });
 
@@ -43,8 +60,17 @@ export const errorHandler:
 
         res.status(500).json({
             error: {
+                code:
+                    'INTERNAL_SERVER_ERROR',
+
                 message:
                     'Internal server error',
+
+                ...(requestId
+                    ? {
+                        requestId,
+                    }
+                    : {}),
             },
         });
     };
