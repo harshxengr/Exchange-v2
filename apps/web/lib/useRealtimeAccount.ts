@@ -11,6 +11,10 @@ import {
   getToken,
 } from './auth';
 
+import {
+  getRealtimeWebSocketUrl,
+} from './wsUrl';
+
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   'http://localhost:4000';
@@ -196,30 +200,7 @@ async function getJson<T>(
 }
 
 function websocketUrl(): string {
-  const configured =
-    process.env
-      .NEXT_PUBLIC_WS_URL;
-
-  if (
-    configured
-  ) {
-    return configured;
-  }
-
-  if (
-    typeof window ===
-    'undefined'
-  ) {
-    return '';
-  }
-
-  const protocol =
-    window.location.protocol ===
-    'https:'
-      ? 'wss:'
-      : 'ws:';
-
-  return `${protocol}//localhost:4000/ws`;
+  return getRealtimeWebSocketUrl();
 }
 
 export function useRealtimeAccount(): AccountState {

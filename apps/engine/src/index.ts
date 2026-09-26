@@ -1,3 +1,5 @@
+import './loadEnv.js';
+
 import {
     connectRedis,
     createRedisClient,

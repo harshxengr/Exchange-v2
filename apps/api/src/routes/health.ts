@@ -66,7 +66,7 @@ export function healthRouter(
                         Array<{
                             ok: number;
                         }>
-                    >`SELECT 1`,
+                    >`SELECT 1 AS ok`,
                 ]);
 
                 res.status(

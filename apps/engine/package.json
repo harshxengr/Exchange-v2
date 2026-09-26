@@ -13,7 +13,8 @@
     },
     "dependencies": {
         "@exchange/domain": "workspace:*",
-        "@exchange/messaging": "workspace:*"
+        "@exchange/messaging": "workspace:*",
+        "dotenv": "^17.0.0"
     },
     "devDependencies": {
         "@types/node": "^24.0.0",

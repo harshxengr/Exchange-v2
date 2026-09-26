@@ -87,6 +87,9 @@ importers:
       '@exchange/messaging':
         specifier: workspace:*
         version: link:../../packages/messaging
+      dotenv:
+        specifier: ^17.0.0
+        version: 17.4.2
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -162,6 +165,9 @@ importers:
       '@prisma/client':
         specifier: 7.10.0
         version: 7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2))(typescript@7.0.2)
+      dotenv:
+        specifier: ^17.0.0
+        version: 17.4.2
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -172,9 +178,6 @@ importers:
       '@types/pg':
         specifier: ^8.0.0
         version: 8.23.1
-      dotenv:
-        specifier: ^17.0.0
-        version: 17.4.2
       prisma:
         specifier: ^7.10.0
         version: 7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@7.0.2)

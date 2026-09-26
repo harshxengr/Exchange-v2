@@ -18,6 +18,10 @@ import {
   type RecentTrade,
 } from './api';
 
+import {
+  getRealtimeWebSocketUrl,
+} from './wsUrl';
+
 type RealtimeState = {
   orderBook:
     OrderBook | null;
@@ -116,33 +120,8 @@ type RealtimeMessage =
         string;
     };
 
-function getWebSocketUrl(
-  marketId: string,
-): string {
-  const configured =
-    process.env
-      .NEXT_PUBLIC_WS_URL;
-
-  if (
-    configured
-  ) {
-    return configured;
-  }
-
-  if (
-    typeof window ===
-    'undefined'
-  ) {
-    return '';
-  }
-
-  const protocol =
-    window.location.protocol ===
-    'https:'
-      ? 'wss:'
-      : 'ws:';
-
-  return `${protocol}//${window.location.host}/ws`;
+function getWebSocketUrl(): string {
+  return getRealtimeWebSocketUrl();
 }
 
 async function loadSnapshot(
@@ -468,9 +447,7 @@ export function useRealtimeMarket(
           }
 
           const base =
-            getWebSocketUrl(
-              marketId,
-            );
+            getWebSocketUrl();
 
           if (
             !base
