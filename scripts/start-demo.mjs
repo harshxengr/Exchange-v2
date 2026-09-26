@@ -2,6 +2,41 @@ import {
   spawn,
 } from 'node:child_process';
 
+import {
+  existsSync,
+} from 'node:fs';
+
+import {
+  dirname,
+  resolve,
+} from 'node:path';
+
+import {
+  fileURLToPath,
+} from 'node:url';
+
+import {
+  loadEnvFile,
+} from 'node:process';
+
+const rootDir =
+  resolve(
+    dirname(
+      fileURLToPath(import.meta.url),
+    ),
+    '..',
+  );
+
+const envFile =
+  resolve(
+    rootDir,
+    '.env',
+  );
+
+if (existsSync(envFile)) {
+  loadEnvFile(envFile);
+}
+
 const pnpm =
   process.platform ===
   'win32'
