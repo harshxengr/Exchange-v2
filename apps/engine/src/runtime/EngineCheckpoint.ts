@@ -1,7 +1,7 @@
 import type { EngineSnapshot } from '../engine/MatchingEngine.js';
 
 export interface EngineCheckpoint {
-  version: 1;
+  version: 2;
 
   lastProcessedCommandStreamId: string | null;
 
