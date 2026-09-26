@@ -53,6 +53,16 @@ export type LedgerEntry = Prisma.LedgerEntryModel
  */
 export type Deposit = Prisma.DepositModel
 /**
+ * Model Withdrawal
+ * 
+ */
+export type Withdrawal = Prisma.WithdrawalModel
+/**
+ * Model WithdrawalAttempt
+ * 
+ */
+export type WithdrawalAttempt = Prisma.WithdrawalAttemptModel
+/**
  * Model ProcessedEvent
  * 
  */

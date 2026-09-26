@@ -58,6 +58,8 @@ export const ModelName = {
   Trade: 'Trade',
   LedgerEntry: 'LedgerEntry',
   Deposit: 'Deposit',
+  Withdrawal: 'Withdrawal',
+  WithdrawalAttempt: 'WithdrawalAttempt',
   ProcessedEvent: 'ProcessedEvent',
   ProcessedCommand: 'ProcessedCommand'
 } as const
@@ -179,6 +181,47 @@ export const DepositScalarFieldEnum = {
 } as const
 
 export type DepositScalarFieldEnum = (typeof DepositScalarFieldEnum)[keyof typeof DepositScalarFieldEnum]
+
+
+export const WithdrawalScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  asset: 'asset',
+  amount: 'amount',
+  destination: 'destination',
+  externalRef: 'externalRef',
+  providerRef: 'providerRef',
+  failureReason: 'failureReason',
+  status: 'status',
+  reservedAt: 'reservedAt',
+  processingAt: 'processingAt',
+  completedAt: 'completedAt',
+  failedAt: 'failedAt',
+  attemptCount: 'attemptCount',
+  lastAttemptAt: 'lastAttemptAt',
+  nextAttemptAt: 'nextAttemptAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type WithdrawalScalarFieldEnum = (typeof WithdrawalScalarFieldEnum)[keyof typeof WithdrawalScalarFieldEnum]
+
+
+export const WithdrawalAttemptScalarFieldEnum = {
+  id: 'id',
+  withdrawalId: 'withdrawalId',
+  attemptNumber: 'attemptNumber',
+  provider: 'provider',
+  operation: 'operation',
+  status: 'status',
+  providerRef: 'providerRef',
+  httpStatus: 'httpStatus',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage',
+  createdAt: 'createdAt'
+} as const
+
+export type WithdrawalAttemptScalarFieldEnum = (typeof WithdrawalAttemptScalarFieldEnum)[keyof typeof WithdrawalAttemptScalarFieldEnum]
 
 
 export const ProcessedEventScalarFieldEnum = {

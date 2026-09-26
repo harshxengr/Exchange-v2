@@ -404,6 +404,8 @@ export const ModelName = {
   Trade: 'Trade',
   LedgerEntry: 'LedgerEntry',
   Deposit: 'Deposit',
+  Withdrawal: 'Withdrawal',
+  WithdrawalAttempt: 'WithdrawalAttempt',
   ProcessedEvent: 'ProcessedEvent',
   ProcessedCommand: 'ProcessedCommand'
 } as const
@@ -421,7 +423,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "market" | "balance" | "order" | "trade" | "ledgerEntry" | "deposit" | "processedEvent" | "processedCommand"
+    modelProps: "user" | "market" | "balance" | "order" | "trade" | "ledgerEntry" | "deposit" | "withdrawal" | "withdrawalAttempt" | "processedEvent" | "processedCommand"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -943,6 +945,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    Withdrawal: {
+      payload: Prisma.$WithdrawalPayload<ExtArgs>
+      fields: Prisma.WithdrawalFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.WithdrawalFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.WithdrawalFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>
+        }
+        findFirst: {
+          args: Prisma.WithdrawalFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.WithdrawalFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>
+        }
+        findMany: {
+          args: Prisma.WithdrawalFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>[]
+        }
+        create: {
+          args: Prisma.WithdrawalCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>
+        }
+        createMany: {
+          args: Prisma.WithdrawalCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.WithdrawalCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>[]
+        }
+        delete: {
+          args: Prisma.WithdrawalDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>
+        }
+        update: {
+          args: Prisma.WithdrawalUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>
+        }
+        deleteMany: {
+          args: Prisma.WithdrawalDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.WithdrawalUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.WithdrawalUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>[]
+        }
+        upsert: {
+          args: Prisma.WithdrawalUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalPayload>
+        }
+        aggregate: {
+          args: Prisma.WithdrawalAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateWithdrawal>
+        }
+        groupBy: {
+          args: Prisma.WithdrawalGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WithdrawalGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.WithdrawalCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WithdrawalCountAggregateOutputType> | number
+        }
+      }
+    }
+    WithdrawalAttempt: {
+      payload: Prisma.$WithdrawalAttemptPayload<ExtArgs>
+      fields: Prisma.WithdrawalAttemptFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.WithdrawalAttemptFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.WithdrawalAttemptFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>
+        }
+        findFirst: {
+          args: Prisma.WithdrawalAttemptFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.WithdrawalAttemptFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>
+        }
+        findMany: {
+          args: Prisma.WithdrawalAttemptFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>[]
+        }
+        create: {
+          args: Prisma.WithdrawalAttemptCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>
+        }
+        createMany: {
+          args: Prisma.WithdrawalAttemptCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.WithdrawalAttemptCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>[]
+        }
+        delete: {
+          args: Prisma.WithdrawalAttemptDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>
+        }
+        update: {
+          args: Prisma.WithdrawalAttemptUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>
+        }
+        deleteMany: {
+          args: Prisma.WithdrawalAttemptDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.WithdrawalAttemptUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.WithdrawalAttemptUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>[]
+        }
+        upsert: {
+          args: Prisma.WithdrawalAttemptUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WithdrawalAttemptPayload>
+        }
+        aggregate: {
+          args: Prisma.WithdrawalAttemptAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateWithdrawalAttempt>
+        }
+        groupBy: {
+          args: Prisma.WithdrawalAttemptGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WithdrawalAttemptGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.WithdrawalAttemptCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WithdrawalAttemptCountAggregateOutputType> | number
+        }
+      }
+    }
     ProcessedEvent: {
       payload: Prisma.$ProcessedEventPayload<ExtArgs>
       fields: Prisma.ProcessedEventFieldRefs
@@ -1231,6 +1381,47 @@ export const DepositScalarFieldEnum = {
 } as const
 
 export type DepositScalarFieldEnum = (typeof DepositScalarFieldEnum)[keyof typeof DepositScalarFieldEnum]
+
+
+export const WithdrawalScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  asset: 'asset',
+  amount: 'amount',
+  destination: 'destination',
+  externalRef: 'externalRef',
+  providerRef: 'providerRef',
+  failureReason: 'failureReason',
+  status: 'status',
+  reservedAt: 'reservedAt',
+  processingAt: 'processingAt',
+  completedAt: 'completedAt',
+  failedAt: 'failedAt',
+  attemptCount: 'attemptCount',
+  lastAttemptAt: 'lastAttemptAt',
+  nextAttemptAt: 'nextAttemptAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type WithdrawalScalarFieldEnum = (typeof WithdrawalScalarFieldEnum)[keyof typeof WithdrawalScalarFieldEnum]
+
+
+export const WithdrawalAttemptScalarFieldEnum = {
+  id: 'id',
+  withdrawalId: 'withdrawalId',
+  attemptNumber: 'attemptNumber',
+  provider: 'provider',
+  operation: 'operation',
+  status: 'status',
+  providerRef: 'providerRef',
+  httpStatus: 'httpStatus',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage',
+  createdAt: 'createdAt'
+} as const
+
+export type WithdrawalAttemptScalarFieldEnum = (typeof WithdrawalAttemptScalarFieldEnum)[keyof typeof WithdrawalAttemptScalarFieldEnum]
 
 
 export const ProcessedEventScalarFieldEnum = {
@@ -1571,6 +1762,8 @@ export type GlobalOmitConfig = {
   trade?: Prisma.TradeOmit
   ledgerEntry?: Prisma.LedgerEntryOmit
   deposit?: Prisma.DepositOmit
+  withdrawal?: Prisma.WithdrawalOmit
+  withdrawalAttempt?: Prisma.WithdrawalAttemptOmit
   processedEvent?: Prisma.ProcessedEventOmit
   processedCommand?: Prisma.ProcessedCommandOmit
 }

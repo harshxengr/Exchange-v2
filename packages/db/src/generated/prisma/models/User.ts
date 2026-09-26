@@ -194,6 +194,7 @@ export type UserWhereInput = {
   orders?: Prisma.OrderListRelationFilter
   buyTrades?: Prisma.TradeListRelationFilter
   sellTrades?: Prisma.TradeListRelationFilter
+  withdrawals?: Prisma.WithdrawalListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -207,6 +208,7 @@ export type UserOrderByWithRelationInput = {
   orders?: Prisma.OrderOrderByRelationAggregateInput
   buyTrades?: Prisma.TradeOrderByRelationAggregateInput
   sellTrades?: Prisma.TradeOrderByRelationAggregateInput
+  withdrawals?: Prisma.WithdrawalOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -223,6 +225,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   orders?: Prisma.OrderListRelationFilter
   buyTrades?: Prisma.TradeListRelationFilter
   sellTrades?: Prisma.TradeListRelationFilter
+  withdrawals?: Prisma.WithdrawalListRelationFilter
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -260,6 +263,7 @@ export type UserCreateInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeCreateNestedManyWithoutBuyerInput
   sellTrades?: Prisma.TradeCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -273,6 +277,7 @@ export type UserUncheckedCreateInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutBuyerInput
   sellTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserUpdateInput = {
@@ -286,6 +291,7 @@ export type UserUpdateInput = {
   orders?: Prisma.OrderUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUpdateManyWithoutBuyerNestedInput
   sellTrades?: Prisma.TradeUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -299,6 +305,7 @@ export type UserUncheckedUpdateInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUncheckedUpdateManyWithoutBuyerNestedInput
   sellTrades?: Prisma.TradeUncheckedUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -428,6 +435,20 @@ export type UserUpdateOneRequiredWithoutSellTradesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutSellTradesInput, Prisma.UserUpdateWithoutSellTradesInput>, Prisma.UserUncheckedUpdateWithoutSellTradesInput>
 }
 
+export type UserCreateNestedOneWithoutWithdrawalsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutWithdrawalsInput, Prisma.UserUncheckedCreateWithoutWithdrawalsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutWithdrawalsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutWithdrawalsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutWithdrawalsInput, Prisma.UserUncheckedCreateWithoutWithdrawalsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutWithdrawalsInput
+  upsert?: Prisma.UserUpsertWithoutWithdrawalsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutWithdrawalsInput, Prisma.UserUpdateWithoutWithdrawalsInput>, Prisma.UserUncheckedUpdateWithoutWithdrawalsInput>
+}
+
 export type UserCreateWithoutBalancesInput = {
   id?: string
   email: string
@@ -438,6 +459,7 @@ export type UserCreateWithoutBalancesInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeCreateNestedManyWithoutBuyerInput
   sellTrades?: Prisma.TradeCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutBalancesInput = {
@@ -450,6 +472,7 @@ export type UserUncheckedCreateWithoutBalancesInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutBuyerInput
   sellTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutBalancesInput = {
@@ -478,6 +501,7 @@ export type UserUpdateWithoutBalancesInput = {
   orders?: Prisma.OrderUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUpdateManyWithoutBuyerNestedInput
   sellTrades?: Prisma.TradeUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutBalancesInput = {
@@ -490,6 +514,7 @@ export type UserUncheckedUpdateWithoutBalancesInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUncheckedUpdateManyWithoutBuyerNestedInput
   sellTrades?: Prisma.TradeUncheckedUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutOrdersInput = {
@@ -502,6 +527,7 @@ export type UserCreateWithoutOrdersInput = {
   balances?: Prisma.BalanceCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeCreateNestedManyWithoutBuyerInput
   sellTrades?: Prisma.TradeCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutOrdersInput = {
@@ -514,6 +540,7 @@ export type UserUncheckedCreateWithoutOrdersInput = {
   balances?: Prisma.BalanceUncheckedCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutBuyerInput
   sellTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutOrdersInput = {
@@ -542,6 +569,7 @@ export type UserUpdateWithoutOrdersInput = {
   balances?: Prisma.BalanceUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUpdateManyWithoutBuyerNestedInput
   sellTrades?: Prisma.TradeUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutOrdersInput = {
@@ -554,6 +582,7 @@ export type UserUncheckedUpdateWithoutOrdersInput = {
   balances?: Prisma.BalanceUncheckedUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUncheckedUpdateManyWithoutBuyerNestedInput
   sellTrades?: Prisma.TradeUncheckedUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserCreateWithoutBuyTradesInput = {
@@ -566,6 +595,7 @@ export type UserCreateWithoutBuyTradesInput = {
   balances?: Prisma.BalanceCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderCreateNestedManyWithoutUserInput
   sellTrades?: Prisma.TradeCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutBuyTradesInput = {
@@ -578,6 +608,7 @@ export type UserUncheckedCreateWithoutBuyTradesInput = {
   balances?: Prisma.BalanceUncheckedCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutUserInput
   sellTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutSellerInput
+  withdrawals?: Prisma.WithdrawalUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutBuyTradesInput = {
@@ -595,6 +626,7 @@ export type UserCreateWithoutSellTradesInput = {
   balances?: Prisma.BalanceCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeCreateNestedManyWithoutBuyerInput
+  withdrawals?: Prisma.WithdrawalCreateNestedManyWithoutUserInput
 }
 
 export type UserUncheckedCreateWithoutSellTradesInput = {
@@ -607,6 +639,7 @@ export type UserUncheckedCreateWithoutSellTradesInput = {
   balances?: Prisma.BalanceUncheckedCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutUserInput
   buyTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutBuyerInput
+  withdrawals?: Prisma.WithdrawalUncheckedCreateNestedManyWithoutUserInput
 }
 
 export type UserCreateOrConnectWithoutSellTradesInput = {
@@ -635,6 +668,7 @@ export type UserUpdateWithoutBuyTradesInput = {
   balances?: Prisma.BalanceUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUpdateManyWithoutUserNestedInput
   sellTrades?: Prisma.TradeUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutBuyTradesInput = {
@@ -647,6 +681,7 @@ export type UserUncheckedUpdateWithoutBuyTradesInput = {
   balances?: Prisma.BalanceUncheckedUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUncheckedUpdateManyWithoutUserNestedInput
   sellTrades?: Prisma.TradeUncheckedUpdateManyWithoutSellerNestedInput
+  withdrawals?: Prisma.WithdrawalUncheckedUpdateManyWithoutUserNestedInput
 }
 
 export type UserUpsertWithoutSellTradesInput = {
@@ -670,6 +705,7 @@ export type UserUpdateWithoutSellTradesInput = {
   balances?: Prisma.BalanceUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUpdateManyWithoutBuyerNestedInput
+  withdrawals?: Prisma.WithdrawalUpdateManyWithoutUserNestedInput
 }
 
 export type UserUncheckedUpdateWithoutSellTradesInput = {
@@ -682,6 +718,75 @@ export type UserUncheckedUpdateWithoutSellTradesInput = {
   balances?: Prisma.BalanceUncheckedUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUncheckedUpdateManyWithoutUserNestedInput
   buyTrades?: Prisma.TradeUncheckedUpdateManyWithoutBuyerNestedInput
+  withdrawals?: Prisma.WithdrawalUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutWithdrawalsInput = {
+  id?: string
+  email: string
+  name?: string | null
+  passwordHash: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  balances?: Prisma.BalanceCreateNestedManyWithoutUserInput
+  orders?: Prisma.OrderCreateNestedManyWithoutUserInput
+  buyTrades?: Prisma.TradeCreateNestedManyWithoutBuyerInput
+  sellTrades?: Prisma.TradeCreateNestedManyWithoutSellerInput
+}
+
+export type UserUncheckedCreateWithoutWithdrawalsInput = {
+  id?: string
+  email: string
+  name?: string | null
+  passwordHash: string
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  balances?: Prisma.BalanceUncheckedCreateNestedManyWithoutUserInput
+  orders?: Prisma.OrderUncheckedCreateNestedManyWithoutUserInput
+  buyTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutBuyerInput
+  sellTrades?: Prisma.TradeUncheckedCreateNestedManyWithoutSellerInput
+}
+
+export type UserCreateOrConnectWithoutWithdrawalsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutWithdrawalsInput, Prisma.UserUncheckedCreateWithoutWithdrawalsInput>
+}
+
+export type UserUpsertWithoutWithdrawalsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutWithdrawalsInput, Prisma.UserUncheckedUpdateWithoutWithdrawalsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutWithdrawalsInput, Prisma.UserUncheckedCreateWithoutWithdrawalsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutWithdrawalsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutWithdrawalsInput, Prisma.UserUncheckedUpdateWithoutWithdrawalsInput>
+}
+
+export type UserUpdateWithoutWithdrawalsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  balances?: Prisma.BalanceUpdateManyWithoutUserNestedInput
+  orders?: Prisma.OrderUpdateManyWithoutUserNestedInput
+  buyTrades?: Prisma.TradeUpdateManyWithoutBuyerNestedInput
+  sellTrades?: Prisma.TradeUpdateManyWithoutSellerNestedInput
+}
+
+export type UserUncheckedUpdateWithoutWithdrawalsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  balances?: Prisma.BalanceUncheckedUpdateManyWithoutUserNestedInput
+  orders?: Prisma.OrderUncheckedUpdateManyWithoutUserNestedInput
+  buyTrades?: Prisma.TradeUncheckedUpdateManyWithoutBuyerNestedInput
+  sellTrades?: Prisma.TradeUncheckedUpdateManyWithoutSellerNestedInput
 }
 
 
@@ -694,6 +799,7 @@ export type UserCountOutputType = {
   orders: number
   buyTrades: number
   sellTrades: number
+  withdrawals: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -701,6 +807,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   orders?: boolean | UserCountOutputTypeCountOrdersArgs
   buyTrades?: boolean | UserCountOutputTypeCountBuyTradesArgs
   sellTrades?: boolean | UserCountOutputTypeCountSellTradesArgs
+  withdrawals?: boolean | UserCountOutputTypeCountWithdrawalsArgs
 }
 
 /**
@@ -741,6 +848,13 @@ export type UserCountOutputTypeCountSellTradesArgs<ExtArgs extends runtime.Types
   where?: Prisma.TradeWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountWithdrawalsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.WithdrawalWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -753,6 +867,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   orders?: boolean | Prisma.User$ordersArgs<ExtArgs>
   buyTrades?: boolean | Prisma.User$buyTradesArgs<ExtArgs>
   sellTrades?: boolean | Prisma.User$sellTradesArgs<ExtArgs>
+  withdrawals?: boolean | Prisma.User$withdrawalsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -789,6 +904,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   orders?: boolean | Prisma.User$ordersArgs<ExtArgs>
   buyTrades?: boolean | Prisma.User$buyTradesArgs<ExtArgs>
   sellTrades?: boolean | Prisma.User$sellTradesArgs<ExtArgs>
+  withdrawals?: boolean | Prisma.User$withdrawalsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -801,6 +917,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     orders: Prisma.$OrderPayload<ExtArgs>[]
     buyTrades: Prisma.$TradePayload<ExtArgs>[]
     sellTrades: Prisma.$TradePayload<ExtArgs>[]
+    withdrawals: Prisma.$WithdrawalPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1207,6 +1324,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   orders<T extends Prisma.User$ordersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$ordersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   buyTrades<T extends Prisma.User$buyTradesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$buyTradesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TradePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   sellTrades<T extends Prisma.User$sellTradesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$sellTradesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TradePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  withdrawals<T extends Prisma.User$withdrawalsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$withdrawalsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$WithdrawalPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1728,6 +1846,30 @@ export type User$sellTradesArgs<ExtArgs extends runtime.Types.Extensions.Interna
   take?: number
   skip?: number
   distinct?: Prisma.TradeScalarFieldEnum | Prisma.TradeScalarFieldEnum[]
+}
+
+/**
+ * User.withdrawals
+ */
+export type User$withdrawalsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Withdrawal
+   */
+  select?: Prisma.WithdrawalSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Withdrawal
+   */
+  omit?: Prisma.WithdrawalOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.WithdrawalInclude<ExtArgs> | null
+  where?: Prisma.WithdrawalWhereInput
+  orderBy?: Prisma.WithdrawalOrderByWithRelationInput | Prisma.WithdrawalOrderByWithRelationInput[]
+  cursor?: Prisma.WithdrawalWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.WithdrawalScalarFieldEnum | Prisma.WithdrawalScalarFieldEnum[]
 }
 
 /**
