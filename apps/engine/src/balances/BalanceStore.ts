@@ -13,23 +13,28 @@ export class BalanceStore {
         balances: Record<string, Balance>,
     ): void {
         /*
-         * Initialization is intentionally idempotent.
+         * Initialization is idempotent for a live account, but
+         * it must also repair a stale zero-valued account.
          *
-         * The API may send the user's durable balance
-         * snapshot before an order or withdrawal when the
-         * engine process has not seen this user yet.
-         *
-         * Never overwrite an already-live engine account:
-         * the matching engine owns the in-memory balance state
-         * while PostgreSQL is its persistence replica.
+         * This can happen after a restart/recovery sequence:
+         * PostgreSQL may already contain a confirmed deposit while
+         * an older engine snapshot still has the user initialized
+         * with zero balances. Replaying the durable snapshot should
+         * fill in those zero/missing assets without overwriting live
+         * non-zero or locked balances owned by the engine.
          */
-        if (
-            this.users.has(userId)
-        ) {
-            return;
-        }
+        let userBalances =
+            this.users.get(userId);
 
-        const userBalances = new Map<string, Balance>();
+        if (!userBalances) {
+            userBalances =
+                new Map<string, Balance>();
+
+            this.users.set(
+                userId,
+                userBalances,
+            );
+        }
 
         for (const [asset, balance] of Object.entries(balances)) {
             if (balance.available < 0n || balance.locked < 0n) {
@@ -38,13 +43,35 @@ export class BalanceStore {
                 );
             }
 
-            userBalances.set(asset, {
-                available: balance.available,
-                locked: balance.locked,
-            });
-        }
+            const current =
+                userBalances.get(asset);
 
-        this.users.set(userId, userBalances);
+            if (!current) {
+                userBalances.set(asset, {
+                    available: balance.available,
+                    locked: balance.locked,
+                });
+                continue;
+            }
+
+            /*
+             * Only repair a completely empty engine balance.
+             * Never replace a live balance or locked reservation.
+             */
+            if (
+                current.available === 0n &&
+                current.locked === 0n &&
+                (
+                    balance.available !== 0n ||
+                    balance.locked !== 0n
+                )
+            ) {
+                userBalances.set(asset, {
+                    available: balance.available,
+                    locked: balance.locked,
+                });
+            }
+        }
     }
 
     ensure(userId: string, asset: string): Balance {
