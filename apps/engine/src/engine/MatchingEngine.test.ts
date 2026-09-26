@@ -129,6 +129,109 @@ describe(
         );
 
         it(
+            'rejects a price that does not match the market tick size',
+            () => {
+                const {
+                    engine,
+                    balances,
+                } = createEngine();
+
+                engine.initializeUser(
+                    'buyer',
+                    {
+                        INR: {
+                            available: 10000n,
+                            locked: 0n,
+                        },
+                    },
+                );
+
+                expect(() =>
+                    engine.placeOrder({
+                        orderId:
+                            'bad-tick',
+                        userId:
+                            'buyer',
+                        marketId:
+                            'TATA_INR',
+                        side: 'BUY',
+                        type: 'LIMIT',
+                        timeInForce:
+                            'GTC',
+                        price: 101n,
+                        quantity: 1n,
+                        postOnly: false,
+                    }),
+                ).not.toThrow();
+
+                /*
+                 * TATA_INR uses a minor-unit tick of 1, so use a
+                 * temporary market with a larger tick for the
+                 * actual rejection assertion.
+                 */
+                const markets =
+                    new MarketRegistry();
+
+                const localBalances =
+                    new BalanceStore();
+
+                const localEngine =
+                    new MatchingEngine(
+                        markets,
+                        localBalances,
+                    );
+
+                markets.register({
+                    ...TATA_INR,
+                    id:
+                        'TATA_TICKED_INR',
+                    tickSize:
+                        5n,
+                });
+
+                localEngine.initializeUser(
+                    'buyer',
+                    {
+                        INR: {
+                            available: 10000n,
+                            locked: 0n,
+                        },
+                    },
+                );
+
+                expect(() =>
+                    localEngine.placeOrder({
+                        orderId:
+                            'bad-tick',
+                        userId:
+                            'buyer',
+                        marketId:
+                            'TATA_TICKED_INR',
+                        side: 'BUY',
+                        type: 'LIMIT',
+                        timeInForce:
+                            'GTC',
+                        price: 101n,
+                        quantity: 1n,
+                        postOnly: false,
+                    }),
+                ).toThrow(
+                    'INVALID_PRICE_TICK',
+                );
+
+                expect(
+                    localBalances.get(
+                        'buyer',
+                        'INR',
+                    ),
+                ).toEqual({
+                    available: 10000n,
+                    locked: 0n,
+                });
+            },
+        );
+
+        it(
             'matches two users and settles both balances',
             () => {
                 const {
@@ -726,6 +829,80 @@ describe(
 
                 expect(
                     balances.get(
+                        'buyer',
+                        'INR',
+                    ),
+                ).toEqual({
+                    available: 10000n,
+                    locked: 0n,
+                });
+            },
+        );
+
+        it(
+            'restores order reservations without changing balances',
+            () => {
+                const first =
+                    createEngine();
+
+                first.engine.initializeUser(
+                    'buyer',
+                    {
+                        INR: {
+                            available: 10000n,
+                            locked: 0n,
+                        },
+                        TATA: {
+                            available: 0n,
+                            locked: 0n,
+                        },
+                    },
+                );
+
+                first.engine.placeOrder({
+                    orderId:
+                        'snapshot-order',
+                    userId:
+                        'buyer',
+                    marketId:
+                        'TATA_INR',
+                    side: 'BUY',
+                    type: 'LIMIT',
+                    timeInForce:
+                        'GTC',
+                    price: 100n,
+                    quantity: 5n,
+                    postOnly: false,
+                });
+
+                const snapshot =
+                    first.engine.createSnapshot();
+
+                const second =
+                    createEngine();
+
+                second.engine.restoreSnapshot(
+                    snapshot,
+                );
+
+                expect(
+                    second.balances.get(
+                        'buyer',
+                        'INR',
+                    ),
+                ).toEqual({
+                    available: 9500n,
+                    locked: 500n,
+                });
+
+                second.engine.cancelOrder(
+                    'buyer',
+                    'TATA_INR',
+                    'snapshot-order',
+                );
+
+                expect(
+                    second.balances.get(
                         'buyer',
                         'INR',
                     ),
