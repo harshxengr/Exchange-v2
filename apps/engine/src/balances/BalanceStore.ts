@@ -1,6 +1,7 @@
 export interface Balance {
     available: bigint;
     locked: bigint;
+    revision: bigint;
 }
 
 type UserBalances = Map<string, Balance>;
@@ -13,13 +14,10 @@ export class BalanceStore {
         balances: Record<string, Balance>,
     ): void {
         /*
-         * Initialization is idempotent for a live account, but it
-         * must also repair a stale zero-valued account. This can
-         * happen after recovery when PostgreSQL already contains
-         * a confirmed deposit while the engine snapshot still has
-         * the user initialized with zero balances.
-         *
-         * Never overwrite a live non-zero/locked engine balance.
+         * INITIALIZE_USER is a durable-state reconciliation command.
+         * The per-asset revision makes it safe against stale PostgreSQL
+         * reads: a snapshot with an older revision can never overwrite
+         * a newer in-memory balance.
          */
         let userBalances =
             this.users.get(
@@ -56,28 +54,13 @@ export class BalanceStore {
                     asset,
                 );
 
-            if (!current) {
-                userBalances.set(
-                    asset,
-                    {
-                        available:
-                            balance.available,
-
-                        locked:
-                            balance.locked,
-                    },
-                );
-
-                continue;
-            }
+            const incomingRevision =
+                balance.revision;
 
             if (
-                current.available === 0n &&
-                current.locked === 0n &&
-                (
-                    balance.available !== 0n ||
-                    balance.locked !== 0n
-                )
+                !current ||
+                incomingRevision >
+                    current.revision
             ) {
                 userBalances.set(
                     asset,
@@ -87,6 +70,9 @@ export class BalanceStore {
 
                         locked:
                             balance.locked,
+
+                        revision:
+                            incomingRevision,
                     },
                 );
             }
@@ -107,6 +93,7 @@ export class BalanceStore {
             balance = {
                 available: 0n,
                 locked: 0n,
+                revision: 0n,
             };
 
             userBalances.set(asset, balance);
@@ -165,7 +152,9 @@ export class BalanceStore {
         }
 
         balance.available -= amount;
+        balance.revision += 1n;
         balance.locked += amount;
+        balance.revision += 1n;
     }
 
     debitLocked(
@@ -188,6 +177,7 @@ export class BalanceStore {
         }
 
         balance.locked -= amount;
+        balance.revision += 1n;
     }
 
     unlock(
@@ -209,6 +199,8 @@ export class BalanceStore {
 
         balance.locked -= amount;
         balance.available += amount;
+        balance.revision += 1n;
+        balance.revision += 1n;
     }
 
     credit(
@@ -263,6 +255,7 @@ export class BalanceStore {
                     {
                         available: balance.available,
                         locked: balance.locked,
+                        revision: balance.revision,
                     },
                 ],
             ),
@@ -300,6 +293,9 @@ export class BalanceStore {
 
                     locked:
                         balance.locked.toString(),
+
+                    revision:
+                        balance.revision.toString(),
                 };
             }
         }
@@ -335,6 +331,12 @@ export class BalanceStore {
 
                     locked:
                         BigInt(balance.locked),
+
+                    revision:
+                        BigInt(
+                            balance.revision ??
+                            '0',
+                        ),
                 });
             }
 
@@ -349,6 +351,7 @@ export class BalanceStore {
 export interface BalanceSnapshot {
     available: string;
     locked: string;
+    revision: string;
 }
 
 export interface BalanceStoreSnapshot {
