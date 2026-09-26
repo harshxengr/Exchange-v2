@@ -7,6 +7,7 @@ import type {
 import {
   acknowledgeCommand,
   appendEvent,
+  appendEngineReply,
   readCommands,
   readPendingCommands,
   claimPendingCommands,
@@ -352,7 +353,25 @@ export class EngineWorker {
 
       /*
        * -------------------------------------------------------
-       * 6. Mark the logical command as processed.
+       * 6. Publish the API reply for synchronous commands.
+       * -------------------------------------------------------
+       */
+      const reply =
+        this.createCommandReply(
+          command,
+          events,
+        );
+
+      if (reply) {
+        await appendEngineReply(
+          this.redis,
+          reply,
+        );
+      }
+
+      /*
+       * -------------------------------------------------------
+       * 7. Mark the logical command as processed.
        * -------------------------------------------------------
        */
       this.engine.markCommandProcessed(
@@ -395,7 +414,71 @@ export class EngineWorker {
       return true;
     } catch (error) {
       /*
-       * Never ACK a failed command.
+       * Expected order/cancel validation failures are part of
+       * the request/response protocol. Return them to the API
+       * instead of leaving the Redis command pending and causing
+       * the HTTP request to time out.
+       */
+      if (
+        this.isExpectedClientCommandError(
+          command,
+          error,
+        )
+      ) {
+        const reason =
+          error instanceof Error
+            ? error.message
+            : String(error);
+
+        await appendEngineReply(
+          this.redis,
+          {
+            type:
+              command.type === 'PLACE_ORDER'
+                ? 'ORDER_REJECTED'
+                : 'COMMAND_REJECTED',
+
+            commandId:
+              command.commandId,
+
+            success:
+              false,
+
+            reason,
+          },
+        );
+
+        this.engine.markCommandProcessed(
+          command.commandId,
+        );
+
+        await this.saveCheckpoint(
+          messageId,
+        );
+
+        await acknowledgeCommand(
+          this.redis,
+          messageId,
+        );
+
+        this.lastProcessedCommandStreamId =
+          messageId;
+
+        console.log(
+          '[engine] command rejected',
+          {
+            messageId,
+            commandId:
+              command.commandId,
+            reason,
+          },
+        );
+
+        return true;
+      }
+
+      /*
+       * Never ACK unexpected/system failures.
        */
       console.error(
         '[engine] command processing failed',
@@ -410,6 +493,151 @@ export class EngineWorker {
 
       return false;
     }
+  }
+
+  private createCommandReply(
+    command: EngineCommand,
+    events: ExchangeEvent[],
+  ) {
+    if (
+      command.type === 'PLACE_ORDER'
+    ) {
+      const orderEvent =
+        events.find(
+          (
+            event,
+          ): event is Extract<
+            ExchangeEvent,
+            {
+              type: 'ORDER_ACCEPTED';
+            }
+          > =>
+            event.type ===
+            'ORDER_ACCEPTED',
+        );
+
+      if (!orderEvent) {
+        throw new Error(
+          `ORDER_REPLY_EVENT_MISSING:${command.commandId}`,
+        );
+      }
+
+      return {
+        type:
+          'ORDER_ACCEPTED' as const,
+
+        commandId:
+          command.commandId,
+
+        success:
+          true as const,
+
+        orderId:
+          orderEvent.orderId,
+
+        userId:
+          orderEvent.userId,
+
+        marketId:
+          orderEvent.marketId,
+
+        status:
+          orderEvent.status as
+            | 'NEW'
+            | 'PARTIALLY_FILLED'
+            | 'FILLED'
+            | 'CANCELED'
+            | 'REJECTED',
+      };
+    }
+
+    if (
+      command.type === 'CANCEL_ORDER'
+    ) {
+      const cancelEvent =
+        events.find(
+          (
+            event,
+          ): event is Extract<
+            ExchangeEvent,
+            {
+              type: 'ORDER_CANCELED';
+            }
+          > =>
+            event.type ===
+            'ORDER_CANCELED',
+        );
+
+      if (!cancelEvent) {
+        throw new Error(
+          `CANCEL_REPLY_EVENT_MISSING:${command.commandId}`,
+        );
+      }
+
+      return {
+        type:
+          'ORDER_CANCELED' as const,
+
+        commandId:
+          command.commandId,
+
+        success:
+          true as const,
+
+        orderId:
+          cancelEvent.orderId,
+
+        userId:
+          cancelEvent.userId,
+
+        marketId:
+          cancelEvent.marketId,
+      };
+    }
+
+    return null;
+  }
+
+  private isExpectedClientCommandError(
+    command: EngineCommand,
+    error: unknown,
+  ): boolean {
+    if (
+      command.type !== 'PLACE_ORDER' &&
+      command.type !== 'CANCEL_ORDER'
+    ) {
+      return false;
+    }
+
+    const reason =
+      error instanceof Error
+        ? error.message
+        : String(error);
+
+    const baseReason =
+      reason.split(':', 1)[0];
+
+    return new Set([
+      'INSUFFICIENT_FUNDS',
+      'USER_NOT_INITIALIZED',
+      'DUPLICATE_ORDER_ID',
+      'POST_ONLY_WOULD_TRADE',
+      'ORDER_NOT_FOUND',
+      'ORDER_NOT_OWNED_BY_USER',
+      'ORDER_NOT_OPEN',
+      'ORDER_NOT_ON_BOOK',
+      'INVALID_QUANTITY',
+      'QUANTITY_BELOW_MINIMUM',
+      'INVALID_LIMIT_PRICE',
+      'MARKET_ORDER_CANNOT_HAVE_PRICE',
+      'MARKET_ORDER_MUST_BE_IOC',
+      'POST_ONLY_REQUIRES_LIMIT',
+      'POST_ONLY_AND_IOC_ARE_INCOMPATIBLE',
+      'INSUFFICIENT_MARKET_LIQUIDITY',
+      'LIMIT_BUY_PRICE_REQUIRED',
+    ]).has(
+      baseReason,
+    );
   }
 
   private async saveCheckpoint(
