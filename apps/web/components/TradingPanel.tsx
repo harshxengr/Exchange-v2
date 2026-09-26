@@ -24,22 +24,16 @@ type Props = {
 function isPositiveDecimal(
   value: string,
 ): boolean {
-  if (
-    !value.trim()
-  ) {
-    return false;
-  }
-
-  const number =
-    Number(
-      value,
-    );
+  const normalized =
+    value.trim();
 
   return (
-    Number.isFinite(
-      number,
+    /^\d+(?:\.\d+)?$/.test(
+      normalized,
     ) &&
-    number > 0
+    !/^0+(?:\.0+)?$/.test(
+      normalized,
+    )
   );
 }
 
@@ -139,32 +133,6 @@ export function TradingPanel({
     ) {
       setError(
         'Quantity must be greater than zero.',
-      );
-
-      return;
-    }
-
-    if (
-      Number(
-        price,
-      ) >
-      Number.MAX_SAFE_INTEGER
-    ) {
-      setError(
-        'Price is too large.',
-      );
-
-      return;
-    }
-
-    if (
-      Number(
-        quantity,
-      ) >
-      Number.MAX_SAFE_INTEGER
-    ) {
-      setError(
-        'Quantity is too large.',
       );
 
       return;
