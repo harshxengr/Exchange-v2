@@ -1,12 +1,23 @@
 'use client';
 
 import {
+    useEffect,
     useMemo,
+    useState,
 } from 'react';
+
+import {
+    getMarket,
+    type MarketDefinition,
+} from '../lib/api';
 
 import {
     useRealtimeMarket,
 } from '../lib/useRealtimeMarket';
+
+import {
+    MarketChart,
+} from './MarketChart';
 
 type Props = {
     marketId:
@@ -29,6 +40,85 @@ function formatNumber(
             value,
         ).toLocaleString(
             'en-IN',
+        );
+    } catch {
+        return value;
+    }
+}
+
+function formatUnits(
+    value:
+    string | null,
+
+    scale:
+    number,
+): string {
+    if (
+        value ===
+        null
+    ) {
+        return '--';
+    }
+
+    try {
+        const negative =
+            value.startsWith(
+                '-',
+            );
+
+        const absolute =
+            negative
+                ? value.slice(1)
+                : value;
+
+        const padded =
+            absolute.padStart(
+                scale + 1,
+                '0',
+            );
+
+        if (
+            scale ===
+            0
+        ) {
+            return (
+                (
+                    negative
+                        ? '-'
+                        : ''
+                ) +
+                BigInt(
+                    padded,
+                ).toString()
+            );
+        }
+
+        const splitAt =
+            padded.length -
+            scale;
+
+        const whole =
+            padded.slice(
+                0,
+                splitAt,
+            );
+
+        const fraction =
+            padded.slice(
+                splitAt,
+            );
+
+        return (
+            (
+                negative
+                    ? '-'
+                    : ''
+            ) +
+            BigInt(
+                whole,
+            ).toString() +
+            '.' +
+            fraction
         );
     } catch {
         return value;
@@ -58,6 +148,69 @@ export function ExchangeTerminal({
         useRealtimeMarket(
             marketId,
         );
+
+    const [
+        market,
+        setMarket,
+    ] =
+        useState<
+            MarketDefinition | null
+        >(null);
+
+    useEffect(
+        () => {
+            let cancelled =
+                false;
+
+            void getMarket(
+                marketId,
+            )
+                .then(
+                    (
+                        result,
+                    ) => {
+                        if (
+                            cancelled
+                        ) {
+                            return;
+                        }
+
+                        setMarket(
+                            result,
+                        );
+                    },
+                )
+                .catch(
+                    () => {
+                        if (
+                            cancelled
+                        ) {
+                            return;
+                        }
+
+                        setMarket(
+                            null,
+                        );
+                    },
+                );
+
+            return () => {
+                cancelled =
+                    true;
+            };
+        },
+        [
+            marketId,
+        ],
+    );
+
+    const priceScale =
+        market?.priceScale ??
+        0;
+
+    const quantityScale =
+        market?.quantityScale ??
+        0;
 
     const asks =
         useMemo(
@@ -134,9 +287,10 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             ticker?.lastPrice ??
                             null,
+                            priceScale,
                         )}
                     </strong>
                 </div>
@@ -159,9 +313,10 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             stats?.high24h ??
                             null,
+                            priceScale,
                         )}
                     </strong>
                 </div>
@@ -172,9 +327,10 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             stats?.low24h ??
                             null,
+                            priceScale,
                         )}
                     </strong>
                 </div>
@@ -185,13 +341,26 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             stats?.volume24h ??
                             '0',
+                            quantityScale,
                         )}
                     </strong>
                 </div>
             </section>
+
+            <MarketChart
+                trades={
+                    trades
+                }
+                priceScale={
+                    priceScale
+                }
+                quantityScale={
+                    quantityScale
+                }
+            />
 
             <section className="main-grid">
                 <div className="panel">
@@ -225,15 +394,17 @@ export function ExchangeTerminal({
                                     key={`ask-${level.price}`}
                                 >
                                     <span>
-                                        {
-                                            level.price
-                                        }
+                                        {formatUnits(
+                                            level.price,
+                                            priceScale,
+                                        )}
                                     </span>
 
                                     <span>
-                                        {
-                                            level.quantity
-                                        }
+                                        {formatUnits(
+                                            level.quantity,
+                                            quantityScale,
+                                        )}
                                     </span>
                                 </div>
                             ),
@@ -245,9 +416,10 @@ export function ExchangeTerminal({
                             </span>
 
                             <strong>
-                                {formatNumber(
+                                {formatUnits(
                                     ticker?.midPrice ??
                                     null,
+                                    priceScale,
                                 )}
                             </strong>
                         </div>
@@ -261,15 +433,17 @@ export function ExchangeTerminal({
                                     key={`bid-${level.price}`}
                                 >
                                     <span>
-                                        {
-                                            level.price
-                                        }
+                                        {formatUnits(
+                                            level.price,
+                                            priceScale,
+                                        )}
                                     </span>
 
                                     <span>
-                                        {
-                                            level.quantity
-                                        }
+                                        {formatUnits(
+                                            level.quantity,
+                                            quantityScale,
+                                        )}
                                     </span>
                                 </div>
                             ),
@@ -328,15 +502,17 @@ export function ExchangeTerminal({
                                         </span>
 
                                         <span>
-                                            {
-                                                trade.price
-                                            }
+                                            {formatUnits(
+                                                trade.price,
+                                                priceScale,
+                                            )}
                                         </span>
 
                                         <span>
-                                            {
-                                                trade.quantity
-                                            }
+                                            {formatUnits(
+                                                trade.quantity,
+                                                quantityScale,
+                                            )}
                                         </span>
                                     </div>
                                 ),
@@ -353,9 +529,10 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             ticker?.bestBid ??
                             null,
+                            priceScale,
                         )}
                     </strong>
                 </div>
@@ -366,9 +543,10 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             ticker?.bestAsk ??
                             null,
+                            priceScale,
                         )}
                     </strong>
                 </div>
@@ -379,9 +557,10 @@ export function ExchangeTerminal({
                     </span>
 
                     <strong>
-                        {formatNumber(
+                        {formatUnits(
                             ticker?.midPrice ??
                             null,
+                            priceScale,
                         )}
                     </strong>
                 </div>
