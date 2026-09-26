@@ -56,6 +56,8 @@ export interface EngineSnapshot {
         OrderBookSnapshot
     >;
 
+    orderReservations?: Record<string, string>;
+
     balances: BalanceStoreSnapshot;
 }
 
