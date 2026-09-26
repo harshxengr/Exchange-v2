@@ -131,10 +131,25 @@ describe(
         it(
             'rejects a price that does not match the market tick size',
             () => {
-                const {
-                    engine,
-                    balances,
-                } = createEngine();
+                const markets =
+                    new MarketRegistry();
+
+                const balances =
+                    new BalanceStore();
+
+                const engine =
+                    new MatchingEngine(
+                        markets,
+                        balances,
+                    );
+
+                markets.register({
+                    ...TATA_INR,
+                    id:
+                        'TATA_TICKED_INR',
+                    tickSize:
+                        5n,
+                });
 
                 engine.initializeUser(
                     'buyer',
@@ -148,59 +163,6 @@ describe(
 
                 expect(() =>
                     engine.placeOrder({
-                        orderId:
-                            'bad-tick',
-                        userId:
-                            'buyer',
-                        marketId:
-                            'TATA_INR',
-                        side: 'BUY',
-                        type: 'LIMIT',
-                        timeInForce:
-                            'GTC',
-                        price: 101n,
-                        quantity: 1n,
-                        postOnly: false,
-                    }),
-                ).not.toThrow();
-
-                /*
-                 * TATA_INR uses a minor-unit tick of 1, so use a
-                 * temporary market with a larger tick for the
-                 * actual rejection assertion.
-                 */
-                const markets =
-                    new MarketRegistry();
-
-                const localBalances =
-                    new BalanceStore();
-
-                const localEngine =
-                    new MatchingEngine(
-                        markets,
-                        localBalances,
-                    );
-
-                markets.register({
-                    ...TATA_INR,
-                    id:
-                        'TATA_TICKED_INR',
-                    tickSize:
-                        5n,
-                });
-
-                localEngine.initializeUser(
-                    'buyer',
-                    {
-                        INR: {
-                            available: 10000n,
-                            locked: 0n,
-                        },
-                    },
-                );
-
-                expect(() =>
-                    localEngine.placeOrder({
                         orderId:
                             'bad-tick',
                         userId:
@@ -220,7 +182,7 @@ describe(
                 );
 
                 expect(
-                    localBalances.get(
+                    balances.get(
                         'buyer',
                         'INR',
                     ),
