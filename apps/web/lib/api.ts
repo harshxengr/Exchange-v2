@@ -78,6 +78,19 @@ export type MarketTicker = {
   string;
 };
 
+export type MarketDefinition = {
+  id: string;
+  baseAsset: string;
+  quoteAsset: string;
+  status:
+    | 'ACTIVE'
+    | 'HALTED';
+  priceScale: number;
+  quantityScale: number;
+  minQuantity: string;
+  tickSize: string;
+};
+
 export type MarketStats = {
   marketId:
   string;
@@ -151,6 +164,16 @@ async function apiGet<T>(
   return body.data;
 }
 
+export function getMarket(
+  marketId: string,
+): Promise<MarketDefinition> {
+  return apiGet<MarketDefinition>(
+    `/api/v1/markets/${encodeURIComponent(
+      marketId,
+    )}`,
+  );
+}
+
 export function getOrderBook(
   marketId: string,
 ): Promise<OrderBook> {
@@ -173,11 +196,12 @@ export function getTicker(
 
 export function getRecentTrades(
   marketId: string,
+  limit = 200,
 ): Promise<RecentTrade[]> {
   return apiGet<RecentTrade[]>(
     `/api/v1/markets/${encodeURIComponent(
       marketId,
-    )}/trades`,
+    )}/trades?limit=${limit}`,
   );
 }
 
