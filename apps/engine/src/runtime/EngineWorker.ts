@@ -77,8 +77,32 @@ export class EngineWorker {
 
     if (!checkpoint) {
       console.log(
-        '[engine] no checkpoint found',
+        '[engine] no valid checkpoint found; replaying the command stream',
       );
+
+      const latestStreamId =
+        await this.recovery.replayAfterCheckpoint(
+          null,
+          (
+            messageId,
+            payload,
+          ) =>
+            this.processMessage(
+              messageId,
+              payload,
+            ),
+        );
+
+      this.lastProcessedCommandStreamId =
+        latestStreamId;
+
+      if (
+        latestStreamId !== null
+      ) {
+        console.log(
+          `[engine] initial recovery complete through=${latestStreamId}`,
+        );
+      }
 
       return;
     }
@@ -630,6 +654,7 @@ export class EngineWorker {
       'INVALID_QUANTITY',
       'QUANTITY_BELOW_MINIMUM',
       'INVALID_LIMIT_PRICE',
+      'INVALID_PRICE_TICK',
       'MARKET_ORDER_CANNOT_HAVE_PRICE',
       'MARKET_ORDER_MUST_BE_IOC',
       'POST_ONLY_REQUIRES_LIMIT',
@@ -646,7 +671,7 @@ export class EngineWorker {
   ): Promise<void> {
     const checkpoint:
       EngineCheckpoint = {
-      version: 1,
+      version: 2,
 
       lastProcessedCommandStreamId:
         messageId,

@@ -1,5 +1,46 @@
 # Exchange-v2
 
+## Architecture
+
+The exchange is organized as a command/event-driven system:
+
+```text
+Next.js Web
+   │ REST + WebSocket
+   ▼
+Express API
+   │
+   ├── Queries ────────────────► PostgreSQL
+   │
+   └── Commands
+         │
+         ▼
+    Redis Streams
+      │         │
+      ▼         ▼
+Matching      Worker
+Engine        Persistence/
+              Withdrawals
+      │
+      └──────────────► Exchange Events
+                              │
+                         PostgreSQL
+                         + WebSocket
+
+Matching Engine:
+- deterministic price-time-priority order book
+- exact integer/BigInt settlement
+- per-order fund reservations
+- checkpoint + command replay recovery
+
+Worker:
+- idempotent event persistence
+- immutable ledger writes
+- payout retries/reconciliation/reversal handling
+```
+
+The PostgreSQL market table is the authoritative active-market configuration used by both the API and matching engine at startup.
+
 ## Free local payout simulation
 
 This project does not require a paid banking or payout provider for local development or resume demonstrations.
@@ -59,6 +100,7 @@ pnpm --filter @exchange/db db:generate
 pnpm --filter @exchange/db db:migrate
 pnpm -r typecheck
 pnpm -r build
+pnpm smoke
 \`\`\`
 
 Then set:

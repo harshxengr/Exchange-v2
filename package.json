@@ -18,7 +18,8 @@
         "db:deploy": "pnpm --filter @exchange/db db:deploy",
         "db:studio": "pnpm --filter @exchange/db db:studio",
         "build:backend": "pnpm --filter @exchange/db db:generate && pnpm --filter @exchange/api... build && pnpm --filter @exchange/engine... build && pnpm --filter @exchange/worker... build",
-        "start:demo": "node scripts/start-demo.mjs"
+        "start:demo": "node scripts/start-demo.mjs",
+        "smoke": "node scripts/smoke-test.mjs"
     },
     "devDependencies": {
         "prettier": "^3.6.2",

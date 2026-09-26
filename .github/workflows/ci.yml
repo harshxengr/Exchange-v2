@@ -82,3 +82,6 @@ jobs:
 
       - name: Worker tests
         run: pnpm --filter @exchange/worker test
+
+      - name: End-to-end runtime smoke test
+        run: node scripts/smoke-test.mjs

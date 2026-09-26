@@ -36,6 +36,23 @@ export class SnapshotStore {
                 raw,
             ) as EngineCheckpoint;
 
+        /*
+         * A checkpoint from an older engine version may contain
+         * reservation state produced by the previous accounting
+         * implementation. Treat it as stale and let command
+         * replay rebuild the engine deterministically.
+         */
+        if (
+            checkpoint.version !== 2 ||
+            checkpoint.snapshot?.version !== 2
+        ) {
+            console.warn(
+                '[engine] stale checkpoint ignored; rebuilding from command stream',
+            );
+
+            return null;
+        }
+
         this.validate(checkpoint);
 
         return checkpoint;
@@ -51,7 +68,7 @@ export class SnapshotStore {
         checkpoint: EngineCheckpoint,
     ): void {
         if (
-            checkpoint.version !== 1
+            checkpoint.version !== 2
         ) {
             throw new Error(
                 `UNSUPPORTED_CHECKPOINT_VERSION:${checkpoint.version}`,

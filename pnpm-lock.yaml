@@ -81,6 +81,9 @@ importers:
 
   apps/engine:
     dependencies:
+      '@exchange/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@exchange/domain':
         specifier: workspace:*
         version: link:../../packages/domain
