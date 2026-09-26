@@ -14,7 +14,8 @@
     "dependencies": {
         "@exchange/domain": "workspace:*",
         "@exchange/messaging": "workspace:*",
-        "dotenv": "^17.0.0"
+        "dotenv": "^17.0.0",
+        "@exchange/db": "workspace:*"
     },
     "devDependencies": {
         "@types/node": "^24.0.0",
