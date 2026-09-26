@@ -131,6 +131,9 @@ export class EngineClient
 
                                 locked:
                                     balance.locked.toString(),
+
+                                revision:
+                                    balance.revision.toString(),
                             },
                         ],
                     ),
