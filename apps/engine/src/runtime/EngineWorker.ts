@@ -991,6 +991,7 @@ export class EngineWorker {
       balances[asset] ?? {
         available: 0n,
         locked: 0n,
+        revision: 0n,
       };
 
     return {
