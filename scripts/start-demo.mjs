@@ -25,9 +25,7 @@ const commands = [
 
 const children =
   commands.map(
-    (
-      [filter, name],
-    ) => {
+    ([filter, name]) => {
       const child =
         spawn(
           pnpm,
@@ -67,7 +65,7 @@ let shuttingDown =
 
 async function shutdown(
   signal,
-): Promise<void> {
+) {
   if (
     shuttingDown
   ) {
@@ -116,9 +114,7 @@ async function shutdown(
               child.exitCode !==
               null
             ) {
-              resolve(
-                undefined,
-              );
+              resolve();
 
               return;
             }
@@ -134,9 +130,7 @@ async function shutdown(
                     );
                   }
 
-                  resolve(
-                    undefined,
-                  );
+                  resolve();
                 },
                 5000,
               );
@@ -148,9 +142,7 @@ async function shutdown(
                   timer,
                 );
 
-                resolve(
-                  undefined,
-                );
+                resolve();
               },
             );
           },
