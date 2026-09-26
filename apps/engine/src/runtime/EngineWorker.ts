@@ -794,6 +794,9 @@ export class EngineWorker {
         locked:
           balance.locked.toString(),
 
+        revision:
+          balance.revision.toString(),
+
         reason:
           'DEPOSIT_CREDIT',
 
@@ -1012,6 +1015,9 @@ export class EngineWorker {
       locked:
         balance.locked.toString(),
 
+      revision:
+        balance.revision.toString(),
+
       reason:
         'WITHDRAWAL_REJECTED',
 
@@ -1072,6 +1078,9 @@ export class EngineWorker {
       locked:
         balance.locked.toString(),
 
+      revision:
+        balance.revision.toString(),
+
       reason,
 
       referenceId:
@@ -1109,6 +1118,12 @@ export class EngineWorker {
               locked:
                 BigInt(
                   balance.locked,
+                ),
+
+              revision:
+                BigInt(
+                  balance.revision ??
+                  '0',
                 ),
             },
           ],
@@ -1396,6 +1411,9 @@ export class EngineWorker {
 
         locked:
           balance.locked.toString(),
+
+        revision:
+          balance.revision.toString(),
 
         occurredAt,
       }),
