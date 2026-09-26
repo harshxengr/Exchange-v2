@@ -35,6 +35,7 @@ FROM base AS engine
 
 RUN pnpm --filter @exchange/domain build && \
     pnpm --filter @exchange/messaging build && \
+    pnpm --filter @exchange/db build && \
     pnpm --filter @exchange/engine build
 
 CMD ["node", "apps/engine/dist/index.js"]
