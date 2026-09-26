@@ -76,6 +76,25 @@ export class EngineClient
     async ensureUserInitialized(
         userId: string,
     ): Promise<void> {
+        const user =
+            await prisma.user.findUnique({
+                where: {
+                    id:
+                        userId,
+                },
+
+                select: {
+                    id:
+                        true,
+                },
+            });
+
+        if (!user) {
+            throw new Error(
+                `USER_NOT_FOUND:${userId}`,
+            );
+        }
+
         const balances =
             await prisma.balance.findMany({
                 where: {
