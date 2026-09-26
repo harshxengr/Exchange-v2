@@ -2,16 +2,17 @@ import {
     z,
 } from 'zod';
 
-const positiveIntegerString =
+const positiveDecimalString =
     z
         .string()
+        .trim()
         .regex(
-            /^d+$/,
-            'value must be a positive integer string',
+            /^\d+(?:\.\d+)?$/,
+            'value must be a positive decimal string',
         )
         .refine(
             value =>
-                !/^0+$/.test(
+                !/^0+(?:\.0+)?$/.test(
                     value,
                 ),
             'value must be greater than zero',
@@ -33,10 +34,10 @@ export const placeOrderSchema =
             ]),
 
         price:
-            positiveIntegerString,
+            positiveDecimalString,
 
         quantity:
-            positiveIntegerString,
+            positiveDecimalString,
 
         postOnly:
             z
