@@ -65,6 +65,7 @@ export interface BalanceChangedEvent extends EventBase {
 
     available: string;
     locked: string;
+    revision?: string;
 }
 
 export interface DepthChangedEvent extends EventBase {
