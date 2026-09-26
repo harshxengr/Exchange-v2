@@ -77,8 +77,32 @@ export class EngineWorker {
 
     if (!checkpoint) {
       console.log(
-        '[engine] no checkpoint found',
+        '[engine] no valid checkpoint found; replaying the command stream',
       );
+
+      const latestStreamId =
+        await this.recovery.replayAfterCheckpoint(
+          null,
+          (
+            messageId,
+            payload,
+          ) =>
+            this.processMessage(
+              messageId,
+              payload,
+            ),
+        );
+
+      this.lastProcessedCommandStreamId =
+        latestStreamId;
+
+      if (
+        latestStreamId !== null
+      ) {
+        console.log(
+          `[engine] initial recovery complete through=${latestStreamId}`,
+        );
+      }
 
       return;
     }
@@ -647,7 +671,7 @@ export class EngineWorker {
   ): Promise<void> {
     const checkpoint:
       EngineCheckpoint = {
-      version: 1,
+      version: 2,
 
       lastProcessedCommandStreamId:
         messageId,
