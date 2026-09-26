@@ -19,6 +19,10 @@ import {
 } from '../middleware/auth.js';
 
 import {
+    rateLimit,
+} from '../middleware/rateLimit.js';
+
+import {
     asyncHandler,
 } from '../middleware/asyncHandler.js';
 
@@ -125,6 +129,36 @@ function normalizeExternalRef(
 
     return reference;
 }
+
+const accountWriteRateLimit =
+    rateLimit({
+        windowMs:
+            60_000,
+
+        max:
+            30,
+
+        keyPrefix:
+            'account-write',
+
+        keyGenerator:
+            req =>
+                req.user?.id ??
+                req.ip ??
+                'unknown',
+    });
+
+const withdrawalCallbackRateLimit =
+    rateLimit({
+        windowMs:
+            60_000,
+
+        max:
+            60,
+
+        keyPrefix:
+            'withdrawal-callback',
+    });
 
 export function createAccountRouter(
     marketData:
@@ -367,6 +401,7 @@ export function createAccountRouter(
     router.post(
         '/deposits',
         requireAuth,
+        accountWriteRateLimit,
         asyncHandler(
             async (
                 req,
@@ -768,6 +803,7 @@ export function createAccountRouter(
     router.post(
         '/withdrawals',
         requireAuth,
+        accountWriteRateLimit,
         asyncHandler(
             async (
                 req,
@@ -1077,6 +1113,7 @@ export function createAccountRouter(
      */
     router.post(
         '/withdrawals/callback',
+        withdrawalCallbackRateLimit,
         asyncHandler(
             async (
                 req,
