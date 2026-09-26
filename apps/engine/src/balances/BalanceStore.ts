@@ -15,14 +15,16 @@ export class BalanceStore {
     ): void {
         /*
          * INITIALIZE_USER is a durable-state reconciliation command.
-         * The per-asset revision makes it safe against stale PostgreSQL
-         * reads: a snapshot with an older revision can never overwrite
-         * a newer in-memory balance.
+         * Revisions make the synchronization monotonic: stale database
+         * snapshots cannot overwrite a newer in-memory balance.
+         *
+         * Revision zero is treated as an unversioned bootstrap state.
+         * If an old checkpoint has a zero balance at revision zero while
+         * PostgreSQL has a non-zero revision-zero balance, the durable
+         * balance is safe to hydrate once before live mutations begin.
          */
         let userBalances =
-            this.users.get(
-                userId,
-            );
+            this.users.get(userId);
 
         if (!userBalances) {
             userBalances =
@@ -42,7 +44,8 @@ export class BalanceStore {
         )) {
             if (
                 balance.available < 0n ||
-                balance.locked < 0n
+                balance.locked < 0n ||
+                balance.revision < 0n
             ) {
                 throw new Error(
                     `Invalid balance for ${userId}:${asset}`,
@@ -54,13 +57,21 @@ export class BalanceStore {
                     asset,
                 );
 
-            const incomingRevision =
-                balance.revision;
+            const bootstrapRepair =
+                current !== undefined &&
+                current.revision === 0n &&
+                current.available === 0n &&
+                current.locked === 0n &&
+                balance.revision === 0n &&
+                (
+                    balance.available !== 0n ||
+                    balance.locked !== 0n
+                );
 
             if (
                 !current ||
-                incomingRevision >
-                    current.revision
+                balance.revision > current.revision ||
+                bootstrapRepair
             ) {
                 userBalances.set(
                     asset,
@@ -72,7 +83,7 @@ export class BalanceStore {
                             balance.locked,
 
                         revision:
-                            incomingRevision,
+                            balance.revision,
                     },
                 );
             }
@@ -116,15 +127,14 @@ export class BalanceStore {
             userBalances.get(asset);
 
         /*
-         * An initialized user may legitimately have
-         * no balance row for a particular asset yet.
-         * Treat that as a zero balance instead of
-         * crashing order/recovery processing.
+         * An initialized user may legitimately have no balance row
+         * for a particular asset yet.
          */
         if (!balance) {
             balance = {
                 available: 0n,
                 locked: 0n,
+                revision: 0n,
             };
 
             userBalances.set(
@@ -142,17 +152,24 @@ export class BalanceStore {
         amount: bigint,
     ): void {
         if (amount <= 0n) {
-            throw new Error('LOCK_AMOUNT_MUST_BE_POSITIVE');
+            throw new Error(
+                'LOCK_AMOUNT_MUST_BE_POSITIVE',
+            );
         }
 
-        const balance = this.get(userId, asset);
+        const balance =
+            this.get(
+                userId,
+                asset,
+            );
 
         if (balance.available < amount) {
-            throw new Error('INSUFFICIENT_FUNDS');
+            throw new Error(
+                'INSUFFICIENT_FUNDS',
+            );
         }
 
         balance.available -= amount;
-        balance.revision += 1n;
         balance.locked += amount;
         balance.revision += 1n;
     }
@@ -168,7 +185,11 @@ export class BalanceStore {
             );
         }
 
-        const balance = this.get(userId, asset);
+        const balance =
+            this.get(
+                userId,
+                asset,
+            );
 
         if (balance.locked < amount) {
             throw new Error(
@@ -189,7 +210,11 @@ export class BalanceStore {
             return;
         }
 
-        const balance = this.get(userId, asset);
+        const balance =
+            this.get(
+                userId,
+                asset,
+            );
 
         if (balance.locked < amount) {
             throw new Error(
@@ -199,7 +224,6 @@ export class BalanceStore {
 
         balance.locked -= amount;
         balance.available += amount;
-        balance.revision += 1n;
         balance.revision += 1n;
     }
 
@@ -214,9 +238,14 @@ export class BalanceStore {
             );
         }
 
-        const balance = this.ensure(userId, asset);
+        const balance =
+            this.ensure(
+                userId,
+                asset,
+            );
 
         balance.available += amount;
+        balance.revision += 1n;
     }
 
     debit(
@@ -230,19 +259,29 @@ export class BalanceStore {
             );
         }
 
-        const balance = this.get(userId, asset);
+        const balance =
+            this.get(
+                userId,
+                asset,
+            );
 
         if (balance.available < amount) {
-            throw new Error('INSUFFICIENT_FUNDS');
+            throw new Error(
+                'INSUFFICIENT_FUNDS',
+            );
         }
 
         balance.available -= amount;
+        balance.revision += 1n;
     }
 
     snapshot(
         userId: string,
     ): Record<string, Balance> {
-        const user = this.users.get(userId);
+        const user =
+            this.users.get(
+                userId,
+            );
 
         if (!user) {
             return {};
@@ -253,9 +292,14 @@ export class BalanceStore {
                 ([asset, balance]) => [
                     asset,
                     {
-                        available: balance.available,
-                        locked: balance.locked,
-                        revision: balance.revision,
+                        available:
+                            balance.available,
+
+                        locked:
+                            balance.locked,
+
+                        revision:
+                            balance.revision,
                     },
                 ],
             ),
@@ -266,7 +310,11 @@ export class BalanceStore {
         userId: string,
         asset: string,
     ): bigint {
-        const balance = this.get(userId, asset);
+        const balance =
+            this.get(
+                userId,
+                asset,
+            );
 
         return (
             balance.available +
@@ -275,18 +323,24 @@ export class BalanceStore {
     }
 
     snapshotState(): BalanceStoreSnapshot {
-        const users: BalanceStoreSnapshot['users'] = {};
+        const users:
+            BalanceStoreSnapshot['users'] =
+            {};
 
-        for (const [
-            userId,
-            balances,
-        ] of this.users.entries()) {
+        for (
+            const [
+                userId,
+                balances,
+            ] of this.users.entries()
+        ) {
             users[userId] = {};
 
-            for (const [
-                asset,
-                balance,
-            ] of balances.entries()) {
+            for (
+                const [
+                    asset,
+                    balance,
+                ] of balances.entries()
+            ) {
                 users[userId][asset] = {
                     available:
                         balance.available.toString(),
@@ -310,34 +364,48 @@ export class BalanceStore {
     ): void {
         this.users.clear();
 
-        for (const [
-            userId,
-            assets,
-        ] of Object.entries(
-            snapshot.users,
-        )) {
-            const balances = new Map<
-                string,
-                Balance
-            >();
+        for (
+            const [
+                userId,
+                assets,
+            ] of Object.entries(
+                snapshot.users,
+            )
+        ) {
+            const balances =
+                new Map<
+                    string,
+                    Balance
+                >();
 
-            for (const [
-                asset,
-                balance,
-            ] of Object.entries(assets)) {
-                balances.set(asset, {
-                    available:
-                        BigInt(balance.available),
+            for (
+                const [
+                    asset,
+                    balance,
+                ] of Object.entries(
+                    assets,
+                )
+            ) {
+                balances.set(
+                    asset,
+                    {
+                        available:
+                            BigInt(
+                                balance.available,
+                            ),
 
-                    locked:
-                        BigInt(balance.locked),
+                        locked:
+                            BigInt(
+                                balance.locked,
+                            ),
 
-                    revision:
-                        BigInt(
-                            balance.revision ??
-                            '0',
-                        ),
-                });
+                        revision:
+                            BigInt(
+                                balance.revision ??
+                                '0',
+                            ),
+                    },
+                );
             }
 
             this.users.set(
