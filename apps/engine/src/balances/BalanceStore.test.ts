@@ -10,6 +10,7 @@ describe('BalanceStore', () => {
             INR: {
                 available: 1000n,
                 locked: 0n,
+                revision: 0n,
             },
         });
 
@@ -18,6 +19,7 @@ describe('BalanceStore', () => {
         ).toEqual({
             available: 0n,
             locked: 0n,
+            revision: 0n,
         });
 
         expect(
@@ -25,16 +27,18 @@ describe('BalanceStore', () => {
         ).toEqual({
             available: 0n,
             locked: 0n,
+            revision: 0n,
         });
     });
 
-    it('repairs an initialized zero balance from durable state', () => {
+    it('repairs a zero revision-zero balance from durable bootstrap state', () => {
         const store = new BalanceStore();
 
         store.initializeUser('user-1', {
             INR: {
                 available: 0n,
                 locked: 0n,
+                revision: 0n,
             },
         });
 
@@ -42,6 +46,7 @@ describe('BalanceStore', () => {
             INR: {
                 available: 10000n,
                 locked: 0n,
+                revision: 0n,
             },
         });
 
@@ -50,16 +55,18 @@ describe('BalanceStore', () => {
         ).toEqual({
             available: 10000n,
             locked: 0n,
+            revision: 0n,
         });
     });
 
-    it('does not overwrite a live non-zero balance during reconciliation', () => {
+    it('does not overwrite a live balance during reconciliation', () => {
         const store = new BalanceStore();
 
         store.initializeUser('user-1', {
             INR: {
                 available: 10000n,
                 locked: 0n,
+                revision: 0n,
             },
         });
 
@@ -73,6 +80,7 @@ describe('BalanceStore', () => {
             INR: {
                 available: 9000n,
                 locked: 1000n,
+                revision: 0n,
             },
         });
 
@@ -81,6 +89,63 @@ describe('BalanceStore', () => {
         ).toEqual({
             available: 9000n,
             locked: 1000n,
+            revision: 1n,
+        });
+    });
+
+    it('does not accept a stale lower revision', () => {
+        const store = new BalanceStore();
+
+        store.initializeUser('user-1', {
+            INR: {
+                available: 5000n,
+                locked: 0n,
+                revision: 5n,
+            },
+        });
+
+        store.initializeUser('user-1', {
+            INR: {
+                available: 1000n,
+                locked: 0n,
+                revision: 4n,
+            },
+        });
+
+        expect(
+            store.get('user-1', 'INR'),
+        ).toEqual({
+            available: 5000n,
+            locked: 0n,
+            revision: 5n,
+        });
+    });
+
+    it('accepts a newer revision', () => {
+        const store = new BalanceStore();
+
+        store.initializeUser('user-1', {
+            INR: {
+                available: 1000n,
+                locked: 0n,
+                revision: 1n,
+            },
+        });
+
+        store.initializeUser('user-1', {
+            INR: {
+                available: 2500n,
+                locked: 100n,
+                revision: 2n,
+            },
+        });
+
+        expect(
+            store.get('user-1', 'INR'),
+        ).toEqual({
+            available: 2500n,
+            locked: 100n,
+            revision: 2n,
         });
     });
 
