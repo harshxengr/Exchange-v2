@@ -107,7 +107,38 @@ export class EngineClient
                 'INITIALIZE_USER' as const,
 
             commandId:
-                `initialize-user:${userId}:v1`,
+                `initialize-user:${userId}:${crypto
+                    .createHash('sha256')
+                    .update(
+                        JSON.stringify(
+                            Object.fromEntries(
+                                balances
+                                    .sort(
+                                        (
+                                            left,
+                                            right,
+                                        ) =>
+                                            left.asset.localeCompare(
+                                                right.asset,
+                                            ),
+                                    )
+                                    .map(
+                                        balance => [
+                                            balance.asset,
+                                            {
+                                                available:
+                                                    balance.available.toString(),
+                                                locked:
+                                                    balance.locked.toString(),
+                                            },
+                                        ],
+                                    ),
+                            ),
+                        ),
+                    )
+                    .digest('hex')
+                    .slice(0, 16)`,
+
 
             replyTo:
                 STREAMS.ENGINE_REPLIES,
