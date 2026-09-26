@@ -102,21 +102,25 @@ export class EngineClient
                 },
             });
 
-        const command = {
-            type:
-                'INITIALIZE_USER' as const,
-
-            commandId:
-                `initialize-user:${userId}:v1`,
-
-            replyTo:
-                STREAMS.ENGINE_REPLIES,
-
-            userId,
-
-            balances:
-                Object.fromEntries(
-                    balances.map(
+        /*
+         * INITIALIZE_USER is a state-reconciliation command.
+         * Its id must change when the durable balance snapshot
+         * changes, otherwise Redis/engine idempotency would
+         * incorrectly treat a later deposit as the same command.
+         */
+        const canonicalBalances =
+            Object.fromEntries(
+                balances
+                    .sort(
+                        (
+                            left,
+                            right,
+                        ) =>
+                            left.asset.localeCompare(
+                                right.asset,
+                            ),
+                    )
+                    .map(
                         (
                             balance,
                         ) => [
@@ -130,7 +134,38 @@ export class EngineClient
                             },
                         ],
                     ),
-                ),
+            );
+
+        const snapshotHash =
+            crypto
+                .createHash(
+                    'sha256',
+                )
+                .update(
+                    JSON.stringify(
+                        canonicalBalances,
+                    ),
+                )
+                .digest('hex')
+                .slice(
+                    0,
+                    16,
+                );
+
+        const command = {
+            type:
+                'INITIALIZE_USER' as const,
+
+            commandId:
+                `initialize-user:${userId}:${snapshotHash}`,
+
+            replyTo:
+                STREAMS.ENGINE_REPLIES,
+
+            userId,
+
+            balances:
+                canonicalBalances,
         };
 
         await appendCommand(
