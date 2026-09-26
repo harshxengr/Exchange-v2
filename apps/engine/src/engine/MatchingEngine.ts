@@ -42,7 +42,7 @@ interface SerializedOrder {
 }
 
 export interface EngineSnapshot {
-    version: 1;
+    version: 2;
 
     orderSequence: string;
     tradeSequence: string;
@@ -1234,7 +1234,7 @@ export class MatchingEngine {
     restoreSnapshot(
         snapshot: EngineSnapshot,
     ): void {
-        if (snapshot.version !== 1) {
+        if (snapshot.version !== 2) {
             throw new Error(
                 `UNSUPPORTED_SNAPSHOT_VERSION:${snapshot.version}`,
             );
