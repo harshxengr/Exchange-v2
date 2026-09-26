@@ -24,28 +24,6 @@ type Props = {
     string;
 };
 
-function formatNumber(
-    value:
-        string | null,
-): string {
-    if (
-        value ===
-        null
-    ) {
-        return '--';
-    }
-
-    try {
-        return Number(
-            value,
-        ).toLocaleString(
-            'en-IN',
-        );
-    } catch {
-        return value;
-    }
-}
-
 function formatUnits(
     value:
     string | null,
