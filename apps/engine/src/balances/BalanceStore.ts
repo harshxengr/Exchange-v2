@@ -13,38 +13,84 @@ export class BalanceStore {
         balances: Record<string, Balance>,
     ): void {
         /*
-         * Initialization is intentionally idempotent.
+         * Initialization is idempotent for a live account, but it
+         * must also repair a stale zero-valued account. This can
+         * happen after recovery when PostgreSQL already contains
+         * a confirmed deposit while the engine snapshot still has
+         * the user initialized with zero balances.
          *
-         * The API may send the user's durable balance
-         * snapshot before an order or withdrawal when the
-         * engine process has not seen this user yet.
-         *
-         * Never overwrite an already-live engine account:
-         * the matching engine owns the in-memory balance state
-         * while PostgreSQL is its persistence replica.
+         * Never overwrite a live non-zero/locked engine balance.
          */
-        if (
-            this.users.has(userId)
-        ) {
-            return;
+        let userBalances =
+            this.users.get(
+                userId,
+            );
+
+        if (!userBalances) {
+            userBalances =
+                new Map<string, Balance>();
+
+            this.users.set(
+                userId,
+                userBalances,
+            );
         }
 
-        const userBalances = new Map<string, Balance>();
-
-        for (const [asset, balance] of Object.entries(balances)) {
-            if (balance.available < 0n || balance.locked < 0n) {
+        for (const [
+            asset,
+            balance,
+        ] of Object.entries(
+            balances,
+        )) {
+            if (
+                balance.available < 0n ||
+                balance.locked < 0n
+            ) {
                 throw new Error(
                     `Invalid balance for ${userId}:${asset}`,
                 );
             }
 
-            userBalances.set(asset, {
-                available: balance.available,
-                locked: balance.locked,
-            });
-        }
+            const current =
+                userBalances.get(
+                    asset,
+                );
 
-        this.users.set(userId, userBalances);
+            if (!current) {
+                userBalances.set(
+                    asset,
+                    {
+                        available:
+                            balance.available,
+
+                        locked:
+                            balance.locked,
+                    },
+                );
+
+                continue;
+            }
+
+            if (
+                current.available === 0n &&
+                current.locked === 0n &&
+                (
+                    balance.available !== 0n ||
+                    balance.locked !== 0n
+                )
+            ) {
+                userBalances.set(
+                    asset,
+                    {
+                        available:
+                            balance.available,
+
+                        locked:
+                            balance.locked,
+                    },
+                );
+            }
+        }
     }
 
     ensure(userId: string, asset: string): Balance {
