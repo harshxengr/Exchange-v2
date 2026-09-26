@@ -296,6 +296,44 @@ describe(
         );
 
         it(
+            'rejects an invalid authentication token',
+            async () => {
+                const socket =
+                    new WebSocket(
+                        `ws://127.0.0.1:${port}/ws?token=invalid-token`,
+                    );
+
+                const [code] =
+                    await new Promise<
+                        [number, string]
+                    >(
+                        (
+                            resolve,
+                        ) => {
+                            socket.once(
+                                'close',
+                                (
+                                    closeCode,
+                                    reason,
+                                ) => {
+                                    resolve([
+                                        closeCode,
+                                        reason.toString(),
+                                    ]);
+                                },
+                            );
+                        },
+                    );
+
+                expect(
+                    code,
+                ).toBe(
+                    1008,
+                );
+            },
+        );
+
+        it(
             'subscribes to a valid market',
             async () => {
                 const socket =

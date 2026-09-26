@@ -12,6 +12,7 @@ export type InitializeUserCommand = {
         {
             available: string;
             locked: string;
+            revision?: string;
         }
     >;
 };

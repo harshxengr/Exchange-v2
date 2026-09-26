@@ -413,57 +413,91 @@ export class EventHandler {
            * ---------------------------------------------------
            */
           case 'BALANCE_CHANGED': {
-            await db.balance.upsert({
-              where: {
-                userId_asset: {
+            const incomingRevision =
+              BigInt(
+                event.revision ??
+                '0',
+              );
+
+            const existingBalance =
+              await db.balance.findUnique({
+                where: {
+                  userId_asset: {
+                    userId:
+                      event.userId,
+
+                    asset:
+                      event.asset,
+                  },
+                },
+              });
+
+            if (
+              !existingBalance
+            ) {
+              await db.balance.create({
+                data: {
                   userId:
                     event.userId,
 
                   asset:
                     event.asset,
+
+                  available:
+                    BigInt(
+                      event.available,
+                    ),
+
+                  locked:
+                    BigInt(
+                      event.locked,
+                    ),
+
+                  revision:
+                    incomingRevision,
+
+                  updatedAt:
+                    new Date(
+                      event.occurredAt,
+                    ),
                 },
-              },
+              });
+            } else if (
+              incomingRevision >=
+              existingBalance.revision
+            ) {
+              await db.balance.update({
+                where: {
+                  userId_asset: {
+                    userId:
+                      event.userId,
 
-              create: {
-                userId:
-                  event.userId,
+                    asset:
+                      event.asset,
+                  },
+                },
 
-                asset:
-                  event.asset,
+                data: {
+                  available:
+                    BigInt(
+                      event.available,
+                    ),
 
-                available:
-                  BigInt(
-                    event.available,
-                  ),
+                  locked:
+                    BigInt(
+                      event.locked,
+                    ),
 
-                locked:
-                  BigInt(
-                    event.locked,
-                  ),
+                  revision:
+                    incomingRevision,
 
-                updatedAt:
-                  new Date(
-                    event.occurredAt,
-                  ),
-              },
-
-              update: {
-                available:
-                  BigInt(
-                    event.available,
-                  ),
-
-                locked:
-                  BigInt(
-                    event.locked,
-                  ),
-
-                updatedAt:
-                  new Date(
-                    event.occurredAt,
-                  ),
-              },
-            });
+                  updatedAt:
+                    new Date(
+                      event.occurredAt,
+                    ),
+                },
+              });
+            }
 
             /*
              * -------------------------------------------------

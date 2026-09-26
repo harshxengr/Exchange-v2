@@ -553,6 +553,22 @@ export function useRealtimeMarket(
 
               if (
                 message.type ===
+                'SUBSCRIBED' &&
+                message.channel ===
+                'market'
+              ) {
+                /*
+                 * Refresh after the subscription is acknowledged so
+                 * the REST snapshot covers the race between the
+                 * initial fetch and websocket attachment.
+                 */
+                void refreshMarket();
+
+                return;
+              }
+
+              if (
+                message.type ===
                 'MARKET_DATA_INVALIDATED'
               ) {
                 void refreshMarket(

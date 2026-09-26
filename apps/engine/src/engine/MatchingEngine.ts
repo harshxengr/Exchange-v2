@@ -125,12 +125,38 @@ export class MatchingEngine {
             {
                 available: bigint;
                 locked: bigint;
+                revision?: bigint;
             }
         >,
     ): void {
+        const normalizedBalances =
+            Object.fromEntries(
+                Object.entries(
+                    balances,
+                ).map(
+                    ([
+                        asset,
+                        balance,
+                    ]) => [
+                        asset,
+                        {
+                            available:
+                                balance.available,
+
+                            locked:
+                                balance.locked,
+
+                            revision:
+                                balance.revision ??
+                                0n,
+                        },
+                    ],
+                ),
+            );
+
         this.balances.initializeUser(
             userId,
-            balances,
+            normalizedBalances,
         );
     }
 

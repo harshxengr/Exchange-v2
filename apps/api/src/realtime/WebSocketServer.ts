@@ -312,6 +312,9 @@ export class RealtimeServer {
   private lastEventId =
     '$';
 
+  private readonly seenEventIds =
+    new Set<string>();
+
   constructor(
     server: Server,
     redis: RedisClient,
@@ -471,10 +474,31 @@ export class RealtimeServer {
     const connectionId =
       crypto.randomUUID();
 
+    const authToken =
+      this.getAuthToken(
+        request,
+      );
+
     const userId =
       this.authenticateRequest(
         request,
       );
+
+    /*
+     * A supplied but invalid token must never silently
+     * downgrade an authenticated client to a public socket.
+     */
+    if (
+      authToken &&
+      userId === null
+    ) {
+      socket.close(
+        1008,
+        'Invalid authentication token',
+      );
+
+      return;
+    }
 
     const client:
       ClientState = {
@@ -577,10 +601,9 @@ export class RealtimeServer {
     );
   }
 
-  private authenticateRequest(
+  private getAuthToken(
     request: IncomingMessage,
-  ):
-    string | null {
+  ): string | null {
     const host =
       request.headers.host ??
       'localhost';
@@ -595,6 +618,20 @@ export class RealtimeServer {
     const token =
       url.searchParams.get(
         'token',
+      );
+
+    return token?.trim()
+      ? token.trim()
+      : null;
+  }
+
+  private authenticateRequest(
+    request: IncomingMessage,
+  ):
+    string | null {
+    const token =
+      this.getAuthToken(
+        request,
       );
 
     /*
@@ -1039,6 +1076,39 @@ export class RealtimeServer {
       );
 
       return;
+    }
+
+    if (
+      this.seenEventIds.has(
+        event.eventId,
+      )
+    ) {
+      return;
+    }
+
+    this.seenEventIds.add(
+      event.eventId,
+    );
+
+    /*
+     * Bound memory for long-lived websocket processes.
+     * The stream itself remains the durable source.
+     */
+    if (
+      this.seenEventIds.size >
+      10_000
+    ) {
+      const oldest =
+        this.seenEventIds.values().next().value;
+
+      if (
+        typeof oldest ===
+        'string'
+      ) {
+        this.seenEventIds.delete(
+          oldest,
+        );
+      }
     }
 
     switch (
