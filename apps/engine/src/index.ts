@@ -84,16 +84,9 @@ async function main(): Promise<void> {
     }
 
     /*
-     * The runtime stays independent of persistence.
-     *
-     * Markets are currently loaded from the local demo registry.
-     */
-    /*
-     * We'll register real markets from
-     * database configuration later.
-     *
-     * For now the runtime itself stays
-     * independent of persistence.
+     * The engine uses PostgreSQL only during bootstrap to load
+     * the authoritative active-market configuration. Runtime
+     * matching remains fully in-memory and event driven.
      */
 
     const worker =
