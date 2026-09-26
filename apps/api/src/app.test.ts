@@ -28,7 +28,13 @@ import {
   MarketDataService,
 } from './services/marketDataService.js';
 
-function createMockEngineClient():
+function createMockEngineClient(
+  capturedPlaceOrder?:
+    {
+      price?: string;
+      quantity?: string;
+    },
+):
   EngineClientPort {
   return {
     ensureUserInitialized:
@@ -37,7 +43,20 @@ function createMockEngineClient():
       },
 
     placeOrder:
-      async () => ({
+      async (
+        input,
+      ) => {
+        if (
+          capturedPlaceOrder
+        ) {
+          capturedPlaceOrder.price =
+            input.price;
+
+          capturedPlaceOrder.quantity =
+            input.quantity;
+        }
+
+        return {
         type:
           'ORDER_ACCEPTED',
 
@@ -58,7 +77,8 @@ function createMockEngineClient():
 
         status:
           'NEW',
-      }),
+        };
+      },
 
     cancelOrder:
       async () => ({
@@ -608,6 +628,79 @@ describe(
         expect(
           response.status,
         ).toBe(401);
+      },
+    );
+
+    it(
+      'accepts decimal orders and converts them to market units',
+      async () => {
+        const token =
+          createTestToken();
+
+        const captured = {
+          price:
+            undefined as
+              string | undefined,
+
+          quantity:
+            undefined as
+              string | undefined,
+        };
+
+        const app =
+          createApp(
+            createMockEngineClient(
+              captured,
+            ),
+
+            createMockMarketData(),
+
+            createMockRedis(),
+          );
+
+        const response =
+          await request(
+            app,
+          )
+            .post(
+              '/api/v1/orders',
+            )
+            .set(
+              'Authorization',
+              `Bearer ${token}`,
+            )
+            .send({
+              marketId:
+                'TATA_INR',
+
+              side:
+                'BUY',
+
+              price:
+                '100.25',
+
+              quantity:
+                '1.125',
+
+              postOnly:
+                false,
+            });
+
+        expect(
+          response.status,
+        ).toBe(201);
+
+        expect(
+          captured.price,
+        ).toBe(
+          '10025',
+        );
+
+        expect(
+          captured.quantity,
+        ).toBe(
+          '1125',
+        );
       },
     );
 
