@@ -95,6 +95,15 @@ export class MatchingEngine {
     private readonly processedCommandIds =
         new Set<string>();
 
+    /*
+     * Every open order owns its own reservation.  This prevents
+     * a price-improvement refund on one market/order from
+     * unlocking funds reserved by another order using the same
+     * asset.
+     */
+    private readonly orderReservations =
+        new Map<string, bigint>();
+
     private orderSequence = 0n;
     private tradeSequence = 0n;
 
@@ -210,6 +219,11 @@ export class MatchingEngine {
             reservation,
         );
 
+        this.orderReservations.set(
+            order.id,
+            reservation,
+        );
+
         let result;
 
         try {
@@ -233,6 +247,10 @@ export class MatchingEngine {
                 reservation,
             );
 
+            this.orderReservations.delete(
+                order.id,
+            );
+
             throw error;
         }
 
@@ -242,6 +260,16 @@ export class MatchingEngine {
          */
         this.settleFills(
             order,
+            result.fills,
+            market,
+        );
+
+        /*
+         * Maker orders can be partially filled or fully
+         * consumed by this command. Reconcile each maker's
+         * own reservation before returning funds to the user.
+         */
+        this.reconcileMakerReservations(
             result.fills,
             market,
         );
@@ -334,14 +362,9 @@ export class MatchingEngine {
             );
         }
 
-        const remaining =
-            removed.quantity -
-            removed.filledQuantity;
-
         this.releaseRemainingReservation(
             removed,
             market,
-            remaining,
         );
 
         removed.status =
@@ -667,9 +690,34 @@ export class MatchingEngine {
                     ? taker.userId
                     : fill.makerUserId;
 
+            const buyerOrderId =
+                taker.side === 'BUY'
+                    ? taker.id
+                    : fill.makerOrderId;
+
+            const sellerOrderId =
+                taker.side === 'SELL'
+                    ? taker.id
+                    : fill.makerOrderId;
+
             const quoteAmount =
                 fill.price *
                 fill.quantity;
+
+            /*
+             * Consume the exact reservation belonging to each
+             * order.  Never infer an order's reservation from
+             * the user's aggregate locked balance.
+             */
+            this.consumeOrderReservation(
+                buyerOrderId,
+                quoteAmount,
+            );
+
+            this.consumeOrderReservation(
+                sellerOrderId,
+                fill.quantity,
+            );
 
             /*
              * Buyer gives quote currency.
@@ -745,118 +793,172 @@ export class MatchingEngine {
         remainingQuantity: bigint,
         restsOnBook: boolean,
     ): void {
-        /*
-         * SELL:
-         *
-         * Every executed unit has already
-         * been debited from locked base.
-         *
-         * Anything that doesn't remain on
-         * the order book must be unlocked.
-         */
-        if (
-            order.side === 'SELL'
-        ) {
-            if (!restsOnBook) {
-                this.releaseRemainingReservation(
+        const currentReserved =
+            this.orderReservations.get(
+                order.id,
+            ) ??
+            0n;
+
+        const expectedReserved =
+            restsOnBook
+                ? this.calculateRestingReservation(
                     order,
-                    market,
                     remainingQuantity,
+                )
+                : 0n;
+
+        if (
+            currentReserved <
+            expectedReserved
+        ) {
+            throw new Error(
+                [
+                    'RESERVATION_INVARIANT_BROKEN',
+                    order.id,
+                    currentReserved.toString(),
+                    expectedReserved.toString(),
+                ].join(':'),
+            );
+        }
+
+        const excess =
+            currentReserved -
+            expectedReserved;
+
+        if (excess > 0n) {
+            this.unlockReservation(
+                order,
+                market,
+                excess,
+            );
+        }
+
+        if (expectedReserved === 0n) {
+            this.orderReservations.delete(
+                order.id,
+            );
+        } else {
+            this.orderReservations.set(
+                order.id,
+                expectedReserved,
+            );
+        }
+    }
+
+    private reconcileMakerReservations(
+        fills: Fill[],
+        market: Market,
+    ): void {
+        const makerOrderIds =
+            new Set(
+                fills.map(
+                    fill =>
+                        fill.makerOrderId,
+                ),
+            );
+
+        for (const makerOrderId of makerOrderIds) {
+            const makerOrder =
+                this.orders.get(
+                    makerOrderId,
+                );
+
+            if (!makerOrder) {
+                throw new Error(
+                    `MAKER_ORDER_NOT_FOUND:${makerOrderId}`,
                 );
             }
 
-            return;
+            const remaining =
+                makerOrder.quantity -
+                makerOrder.filledQuantity;
+
+            this.reconcileReservation(
+                makerOrder,
+                market,
+                remaining,
+                remaining > 0n,
+            );
+        }
+    }
+
+    private calculateRestingReservation(
+        order: Order,
+        remainingQuantity: bigint,
+    ): bigint {
+        if (remainingQuantity <= 0n) {
+            return 0n;
         }
 
-        /*
-         * BUY:
-         *
-         * For a resting limit order,
-         * remainingQuantity * limitPrice
-         * should remain locked.
-         */
+        if (
+            order.side === 'SELL'
+        ) {
+            return remainingQuantity;
+        }
+
         if (
             order.type !== 'LIMIT' ||
             order.price === null
         ) {
-            if (!restsOnBook) {
-                this.releaseRemainingReservation(
-                    order,
-                    market,
-                    remainingQuantity,
-                );
-            }
-
-            return;
+            return 0n;
         }
 
-        const expectedLocked =
-            restsOnBook
-                ? remainingQuantity *
-                order.price
-                : 0n;
-
-        const balance =
-            this.balances.get(
-                order.userId,
-                market.quoteAsset,
-            );
-
-        /*
-         * Anything above the expected
-         * remaining reservation is excess.
-         *
-         * This happens when the user gets
-         * price improvement.
-         */
-        const excess =
-            balance.locked -
-            expectedLocked;
-
-        if (excess > 0n) {
-            this.balances.unlock(
-                order.userId,
-                market.quoteAsset,
-                excess,
-            );
-        }
+        return (
+            remainingQuantity *
+            order.price
+        );
     }
 
     private releaseRemainingReservation(
         order: Order,
         market: Market,
-        remainingQuantity: bigint,
     ): void {
-        if (remainingQuantity <= 0n) {
-            return;
-        }
+        const reserved =
+            this.orderReservations.get(
+                order.id,
+            ) ??
+            0n;
 
-        if (
-            order.side === 'SELL'
-        ) {
-            this.balances.unlock(
-                order.userId,
-                market.baseAsset,
-                remainingQuantity,
+        if (reserved <= 0n) {
+            this.orderReservations.delete(
+                order.id,
             );
 
             return;
         }
 
-        if (
-            order.type === 'LIMIT' &&
-            order.price !== null
-        ) {
-            this.balances.unlock(
-                order.userId,
-                market.quoteAsset,
-                remainingQuantity *
-                order.price,
-            );
-        }
+        this.unlockReservation(
+            order,
+            market,
+            reserved,
+        );
+
+        this.orderReservations.delete(
+            order.id,
+        );
     }
 
     private releaseReservation(
+        order: Order,
+        market: Market,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            return;
+        }
+
+        this.unlockReservation(
+            order,
+            market,
+            amount,
+        );
+
+        this.orderReservations.delete(
+            order.id,
+        );
+    }
+
+    private unlockReservation(
         order: Order,
         market: Market,
         amount: bigint,
@@ -880,6 +982,55 @@ export class MatchingEngine {
             market.baseAsset,
             amount,
         );
+    }
+
+    private consumeOrderReservation(
+        orderId: string,
+        amount: bigint,
+    ): void {
+        if (amount <= 0n) {
+            return;
+        }
+
+        const current =
+            this.orderReservations.get(
+                orderId,
+            );
+
+        if (
+            current ===
+            undefined
+        ) {
+            throw new Error(
+                `ORDER_RESERVATION_NOT_FOUND:${orderId}`,
+            );
+        }
+
+        if (current < amount) {
+            throw new Error(
+                [
+                    'ORDER_RESERVATION_UNDERFLOW',
+                    orderId,
+                    current.toString(),
+                    amount.toString(),
+                ].join(':'),
+            );
+        }
+
+        const remaining =
+            current -
+            amount;
+
+        if (remaining === 0n) {
+            this.orderReservations.delete(
+                orderId,
+            );
+        } else {
+            this.orderReservations.set(
+                orderId,
+                remaining,
+            );
+        }
     }
 
     private getOrderBook(
@@ -1043,6 +1194,21 @@ export class MatchingEngine {
 
             orderBooks,
 
+            orderReservations:
+                Object.fromEntries(
+                    [
+                        ...this.orderReservations.entries(),
+                    ].map(
+                        ([
+                            orderId,
+                            amount,
+                        ]) => [
+                            orderId,
+                            amount.toString(),
+                        ],
+                    ),
+                ),
+
             balances:
                 this.balances.snapshotState(),
         };
@@ -1099,6 +1265,51 @@ export class MatchingEngine {
                 order.id,
                 order,
             );
+        }
+
+        /*
+         * Restore per-order reservations. Older checkpoints
+         * may not contain this field, so reconstruct the
+         * minimum reservation required by every open order.
+         */
+        this.orderReservations.clear();
+
+        for (const [
+            orderId,
+            amount,
+        ] of Object.entries(
+            snapshot.orderReservations ?? {},
+        )) {
+            this.orderReservations.set(
+                orderId,
+                BigInt(amount),
+            );
+        }
+
+        for (const order of this.orders.values()) {
+            const remaining =
+                order.quantity -
+                order.filledQuantity;
+
+            if (
+                remaining <= 0n
+            ) {
+                continue;
+            }
+
+            if (
+                !this.orderReservations.has(
+                    order.id,
+                )
+            ) {
+                this.orderReservations.set(
+                    order.id,
+                    this.calculateRestingReservation(
+                        order,
+                        remaining,
+                    ),
+                );
+            }
         }
 
         /*
