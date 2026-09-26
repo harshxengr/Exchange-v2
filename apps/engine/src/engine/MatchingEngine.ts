@@ -532,6 +532,21 @@ export class MatchingEngine {
         }
 
         if (
+            input.type === 'LIMIT' &&
+            input.price !== null &&
+            (
+                market.tickSize <= 0n ||
+                input.price %
+                    market.tickSize !==
+                0n
+            )
+        ) {
+            throw new Error(
+                'INVALID_PRICE_TICK',
+            );
+        }
+
+        if (
             input.type === 'MARKET' &&
             input.price !== null
         ) {
