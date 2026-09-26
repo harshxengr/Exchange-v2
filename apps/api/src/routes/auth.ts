@@ -15,6 +15,10 @@ import {
 } from '../middleware/validate.js';
 
 import {
+    rateLimit,
+} from '../middleware/rateLimit.js';
+
+import {
     registerSchema,
     loginSchema,
 } from '../schemas/auth.js';
@@ -29,11 +33,25 @@ import {
     UnauthorizedError,
 } from '../errors.js';
 
+const authRateLimit =
+    rateLimit({
+        windowMs:
+            60_000,
+
+        max:
+            10,
+
+        keyPrefix:
+            'auth',
+    });
+
 export const authRouter =
     Router();
 
 authRouter.post(
     '/register',
+
+    authRateLimit,
 
     validateBody(
         registerSchema,
@@ -71,6 +89,8 @@ authRouter.post(
 authRouter.post(
     '/login',
 
+    authRateLimit,
+
     validateBody(
         loginSchema,
     ),
@@ -104,17 +124,6 @@ authRouter.post(
     ),
 );
 
-/*
- * Returns the identity represented
- * by the currently authenticated JWT.
- *
- * This endpoint is intentionally simple.
- * It is useful for:
- *
- * - frontend session restoration
- * - testing authentication
- * - debugging authorization
- */
 authRouter.get(
     '/me',
 
