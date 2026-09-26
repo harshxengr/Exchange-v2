@@ -364,6 +364,8 @@ export function useRealtimeAccount(): AccountState {
                     'account',
                 }),
               );
+
+              void loadAccount();
             };
 
           socket.onmessage =
@@ -393,50 +395,44 @@ export function useRealtimeAccount(): AccountState {
                           message.data.asset,
                       );
 
-                    if (
-                      existing
-                    ) {
-                      return {
-                        ...previous,
+                    const nextBalance: Balance = {
+                      asset:
+                        message.data.asset,
 
-                        balances:
-                          previous.balances.map(
-                            balance =>
-                              balance.asset ===
-                              message.data.asset
-                                ? {
-                                    ...balance,
+                      available:
+                        message.data.available,
 
-                                    available:
-                                      message
-                                        .data
-                                        .available,
+                      locked:
+                        message.data.locked,
 
-                                    locked:
-                                      message
-                                        .data
-                                        .locked,
+                      total:
+                        (
+                          BigInt(
+                            message.data.available,
+                          ) +
+                          BigInt(
+                            message.data.locked,
+                          )
+                        ).toString(),
+                    };
 
-                                    total:
-                                      (
-                                        BigInt(
-                                          message
-                                            .data
-                                            .available,
-                                        ) +
-                                        BigInt(
-                                          message
-                                            .data
-                                            .locked,
-                                        )
-                                      ).toString(),
-                                  }
-                                : balance,
-                          ),
-                      };
-                    }
+                    return {
+                      ...previous,
 
-                    return previous;
+                      balances:
+                        existing
+                          ? previous.balances.map(
+                              balance =>
+                                balance.asset ===
+                                nextBalance.asset
+                                  ? nextBalance
+                                  : balance,
+                            )
+                          : [
+                              ...previous.balances,
+                              nextBalance,
+                            ],
+                    };
                   },
                 );
 
@@ -447,85 +443,23 @@ export function useRealtimeAccount(): AccountState {
                 message.type ===
                 'ACCOUNT_ORDER_UPDATED'
               ) {
-                setState(
-                  previous => {
-                    const data =
-                      message.data;
+                /*
+                 * The event is intentionally used as an invalidation
+                 * signal. REST remains the authoritative account
+                 * projection, avoiding fabricated fields such as
+                 * postOnly/userId and handling FILLED transitions
+                 * correctly.
+                 */
+                void loadAccount();
 
-                    const order:
-                      OpenOrder = {
-                      orderId:
-                        data.orderId,
+                return;
+              }
 
-                      userId:
-                        '',
-
-                      marketId:
-                        data.marketId,
-
-                      side:
-                        data.side,
-
-                      type:
-                        data.orderType,
-
-                      timeInForce:
-                        data.timeInForce,
-
-                      price:
-                        data.price,
-
-                      quantity:
-                        data.quantity,
-
-                      filledQuantity:
-                        data.executedQuantity,
-
-                      remainingQuantity:
-                        data.remainingQuantity,
-
-                      postOnly:
-                        false,
-
-                      status:
-                        data.status ===
-                          'PARTIALLY_FILLED'
-                          ? 'PARTIALLY_FILLED'
-                          : 'NEW',
-
-                      createdAt:
-                        data.occurredAt,
-                    };
-
-                    const exists =
-                      previous.openOrders.some(
-                        item =>
-                          item.orderId ===
-                          order.orderId,
-                      );
-
-                    return {
-                      ...previous,
-
-                      openOrders:
-                        exists
-                          ? previous.openOrders.map(
-                              item =>
-                                item.orderId ===
-                                order.orderId
-                                  ? {
-                                      ...item,
-                                      ...order,
-                                    }
-                                  : item,
-                            )
-                          : [
-                              order,
-                              ...previous.openOrders,
-                            ],
-                    };
-                  },
-                );
+              if (
+                message.type ===
+                'ACCOUNT_TRADE_UPDATED'
+              ) {
+                void loadAccount();
 
                 return;
               }
